@@ -41,6 +41,7 @@
 #include <WiFiClient.h>
 #include <Wire.h>
 #include <time.h>
+#include "led_ring.hpp"
 
 /* --------------------------------------------------------------------------- */
 
@@ -79,15 +80,15 @@ struct tm last_motion_timeinfo;
 
 // -------- File included below should define SECRET_SSID and SECRET_PASS --------
 #include "arduino_secrets.h"
-const char *ssid = SECRET_SSID;
-const char *password = SECRET_PASS;
+const char* ssid = SECRET_SSID;
+const char* password = SECRET_PASS;
 // -------------------------------------------------------------------------------
 
 WebServer server(80);
 
 const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = -6 * 3600;
-const int   daylightOffset_sec = 3600;
+const long gmtOffset_sec = -6 * 3600;
+const int daylightOffset_sec = 3600;
 
 // Change for "release" builds
 const char* hostname = "nursery-dev";
@@ -144,13 +145,11 @@ void handle_root() {
            door_closed ? "CLOSED" : "OPEN", doorstr,
            motionstr,
            temp.temperature * 9 / 5 + 32, humidity.relative_humidity,
-           hr, min % 60, sec % 60
-          );
+           hr, min % 60, sec % 60);
   server.send(200, "text/html", buf);
 }
 
-void send_client_redirect(const char* title)
-{
+void send_client_redirect(const char* title) {
   constexpr size_t bufsize = 1024;
   char buf[bufsize];
 
@@ -161,31 +160,28 @@ void send_client_redirect(const char* title)
         <title>%s</title>\
       </head>\
     </html>\
-  ", title);
+  ",
+           title);
 
   server.send(200, "text/html", buf);
 }
 
-void handle_brighter()
-{
+void handle_brighter() {
   increase_brightness();
   send_client_redirect("Increasing brightness");
 }
 
-void handle_dimmer()
-{
+void handle_dimmer() {
   decrease_brightness();
   send_client_redirect("Decreasing brightness");
 }
 
-void handle_off()
-{
+void handle_off() {
   turn_off();
   send_client_redirect("Turning OFF");
 }
 
-void handle_wake()
-{
+void handle_wake() {
   begin_wake();
   send_client_redirect("Waking up");
 }
@@ -209,19 +205,15 @@ void handleNotFound() {
 
 /* --------------------------------------------------------------------------- */
 
-void update_tft_time()
-{
+void update_tft_time() {
   struct tm timeinfo;
-  if (!getLocalTime(&timeinfo))
-  {
+  if (!getLocalTime(&timeinfo)) {
     tft.setCursor(0, 60);
     tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
     tft.print("NTP: ");
     tft.setTextColor(ST77XX_RED, BG_COLOR);
     tft.println("Failed");
-  }
-  else
-  {
+  } else {
     tft.setCursor(0, 60);
     tft.setTextColor(ST77XX_GREEN, BG_COLOR);
     tft.print("NTP: ");
@@ -231,8 +223,9 @@ void update_tft_time()
   }
 }
 
-void setup()
-{
+LEDRing led_ring;
+
+void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 
   pinMode(BUTTON_DOWN, INPUT_PULLDOWN);
@@ -248,9 +241,9 @@ void setup()
   ledcAttachPin(LED_CHANNEL_1, 1);
   ledcSetup(1, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
 
-  tft.init(240, 240);                // Initialize ST7789 screen
+  tft.init(240, 240);  // Initialize ST7789 screen
   pinMode(TFT_BACKLIGHT, OUTPUT);
-  digitalWrite(TFT_BACKLIGHT, HIGH); // Backlight on
+  digitalWrite(TFT_BACKLIGHT, HIGH);  // Backlight on
 
   tft.fillScreen(BG_COLOR);
   tft.setTextSize(2);
@@ -262,7 +255,7 @@ void setup()
   tft.setTextColor(ST77XX_YELLOW);
   tft.print("AHT20: ");
 
-  if (! aht.begin()) {
+  if (!aht.begin()) {
     tft.setTextColor(ST77XX_RED);
     tft.println("FAIL!");
     while (1) delay(100);
@@ -293,15 +286,12 @@ void setup()
     delay(100);
   }
 
-  if (WiFi.status() == WL_CONNECTED)
-  {
+  if (WiFi.status() == WL_CONNECTED) {
     tft.setTextColor(ST77XX_GREEN, BG_COLOR);
     tft.setCursor(0, 20);
     tft.print("WIFI: ");
     tft.println(WiFi.localIP());
-  }
-  else
-  {
+  } else {
     tft.setCursor(0, 20);
     tft.print("WIFI: ");
     tft.println("Failed!");
@@ -310,15 +300,12 @@ void setup()
   tft.setCursor(0, 40);
   tft.setTextColor(ST77XX_YELLOW);
   tft.print("MDNS: ");
-  if (MDNS.begin(hostname))
-  {
+  if (MDNS.begin(hostname)) {
     tft.setCursor(0, 40);
     tft.setTextColor(ST77XX_GREEN, BG_COLOR);
     tft.print("MDNS: ");
     tft.println(hostname);
-  }
-  else
-  {
+  } else {
     tft.println("Failed");
   }
 
@@ -334,8 +321,7 @@ void setup()
   tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
   tft.print("MCP: ");
 
-  if (mcp.begin())
-  {
+  if (mcp.begin()) {
     mcp_found = true;
 
     mcp.pinMode(REMOTE_BRIGHTER, INPUT);
@@ -356,9 +342,7 @@ void setup()
     tft.setCursor(0, 80);
     tft.setTextColor(ST77XX_GREEN, BG_COLOR);
     tft.println("MCP: Found");
-  }
-  else
-  {
+  } else {
     tft.setTextColor(ST77XX_RED, BG_COLOR);
     tft.println("Not found");
   }
@@ -375,14 +359,15 @@ void setup()
   last_direct_input_tm = millis();
 
   door_closed = !mcp.digitalRead(DOOR_SENSOR);
+
+  led_ring.init();
 }
 
 /* --------------------------------------------------------------------------- */
 
 uint32_t last_light_change_ms = 0;
 
-void increase_brightness()
-{
+void increase_brightness() {
   if (!brightness)
     brightness = INITIAL_BRIGHTNESS;
   else
@@ -395,8 +380,7 @@ void increase_brightness()
   last_light_change_ms = millis();
 }
 
-void decrease_brightness()
-{
+void decrease_brightness() {
   brightness -= BRIGHTNESS_STEP;
   if (brightness < 0)
     brightness = 0;
@@ -405,146 +389,124 @@ void decrease_brightness()
   last_light_change_ms = millis();
 }
 
-void begin_wake()
-{
+void begin_wake() {
   waking_up = true;
   wakeup_start_tm = millis();
   last_light_change_ms = millis();
 }
 
-void turn_off()
-{
+void turn_off() {
   brightness = 0;
   waking_up = false;
   getLocalTime(&last_light_change_timeinfo);
 }
 
-void set_backlight(bool state)
-{
+void set_backlight(bool state) {
   backlight = state;
   digitalWrite(TFT_BACKLIGHT, backlight);
 }
 
-void check_for_motion()
-{
-  if (digitalRead(SENSOR_PIR))
-  {
+void check_for_motion() {
+  if (digitalRead(SENSOR_PIR)) {
     pir_triggered = true;
-  }
-  else
-  {
-    if (pir_triggered)
-    {
+  } else {
+    if (pir_triggered) {
       pir_triggered = false;
       getLocalTime(&last_motion_timeinfo);
     }
   }
 }
 
-void loop()
-{
+void loop() {
   digitalWrite(LED_BUILTIN, millis() % 1024 < 512);
 
   server.handleClient();
 
   check_for_motion();
 
-  sensors_event_t humidity, temp;
-  aht.getEvent(&humidity, &temp);
-
-  tft.setCursor(0, 0);
-  tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-  tft.print("AHT20: ");
-  tft.print(temp.temperature * 9 / 5 + 32, 0);
-  tft.print(" F ");
-  tft.print(humidity.relative_humidity, 0);
-  tft.print(" %");
-  tft.println("              ");
-
-  tft.setCursor(0, 100);
-  tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
-  tft.print("Ambient light: ");
-  uint16_t analogread = analogRead(A3);
-  tft.setTextColor(ST77XX_WHITE, BG_COLOR);
-  tft.print(analogread);
-  tft.println("    ");
-
-  tft.setCursor(0, 120);
-  tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-  tft.print("LED level:");
-  char ledstr[10];
-  snprintf(ledstr, 10, "% 3d/%d ", brightness, MAX_BRIGHTNESS);
-  tft.println(ledstr);
-
-  update_tft_time();
-
-  if (digitalRead(BUTTON_DOWN))
-  {
+  if (digitalRead(BUTTON_DOWN)) {
     if (!backlight)
       set_backlight(true);
     decrease_brightness();
-    while (digitalRead(BUTTON_DOWN));
+    while (digitalRead(BUTTON_DOWN))
+      ;
     last_direct_input_tm = millis();
   }
 
-  if (digitalRead(BUTTON_SELECT))
-  {
-    set_backlight(!backlight);
-    while (digitalRead(BUTTON_SELECT));
+  if (digitalRead(BUTTON_SELECT)) {
+    if (!backlight)
+      set_backlight(true);
+    if (led_ring.mode() != LEDRing::TIMEOUT)
+      led_ring.setMode(LEDRing::TIMEOUT);
+    else
+      led_ring.setMode(LEDRing::OFF);
+    while (digitalRead(BUTTON_SELECT))
+      ;
     last_direct_input_tm = millis();
   }
 
-  if (digitalRead(BUTTON_UP))
-  {
+  if (digitalRead(BUTTON_UP)) {
     if (!backlight)
       set_backlight(true);
     increase_brightness();
-    while (digitalRead(BUTTON_UP));
+    while (digitalRead(BUTTON_UP))
+      ;
     last_direct_input_tm = millis();
   }
 
-  if (mcp_found)
-  {
-    static uint32_t last_remote_tm = 0;
-    if (millis() - last_remote_tm > 500)
-    {
-      if (mcp.digitalRead(REMOTE_BRIGHTER))
-        increase_brightness(), last_remote_tm = millis();
-      else if (mcp.digitalRead(REMOTE_DIMMER))
-        decrease_brightness(), last_remote_tm = millis();
-      else if (mcp.digitalRead(REMOTE_WAKE))
-        begin_wake(), last_remote_tm = millis();
-      else if (mcp.digitalRead(REMOTE_OFF))
-        turn_off(), last_remote_tm = millis();
+  EVERY_N_MILLISECONDS(500) {
+    sensors_event_t humidity, temp;
+    aht.getEvent(&humidity, &temp);
+
+    if (backlight) {
+      tft.setCursor(0, 0);
+      tft.setTextColor(ST77XX_GREEN, BG_COLOR);
+      tft.print("AHT20: ");
+      tft.print(temp.temperature * 9 / 5 + 32, 0);
+      tft.print(" F ");
+      tft.print(humidity.relative_humidity, 0);
+      tft.print(" %");
+      tft.println("              ");
+
+      tft.setCursor(0, 100);
+      tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
+      tft.print("Ambient light: ");
+      uint16_t analogread = analogRead(A3);
+      tft.setTextColor(ST77XX_WHITE, BG_COLOR);
+      tft.print(analogread);
+      tft.println("    ");
+
+      tft.setCursor(0, 120);
+      tft.setTextColor(ST77XX_GREEN, BG_COLOR);
+      tft.print("LED level:");
+      char ledstr[10];
+      snprintf(ledstr, 10, "% 3d/%d ", brightness, MAX_BRIGHTNESS);
+      tft.println(ledstr);
+
+      update_tft_time();
     }
 
-    if (mcp.digitalRead(DOOR_SENSOR))
-    {
-      if (door_closed)
-      {
-        getLocalTime(&last_door_change_timeinfo);
-        door_closed = false;
-      }
-    }
-    else
-    {
-      if (!door_closed)
-      {
-        getLocalTime(&last_door_change_timeinfo);
-        door_closed = true;
+    if (mcp_found) {
+      if (mcp.digitalRead(DOOR_SENSOR)) {
+        if (door_closed) {
+          getLocalTime(&last_door_change_timeinfo);
+          door_closed = false;
+        }
+      } else {
+        if (!door_closed) {
+          getLocalTime(&last_door_change_timeinfo);
+          door_closed = true;
+        }
       }
     }
   }
 
-  if (waking_up)
-  {
+  if (waking_up) {
     brightness = (millis() - wakeup_start_tm) / 2000;
     if (brightness >= 2 * BRIGHTNESS_STEP)
       waking_up = false;
     getLocalTime(&last_light_change_timeinfo);
-  }
-  else if (brightness && millis() - last_light_change_ms > 3600000 * 2) // 2 hours
-  {
+  } else if (brightness && millis() - last_light_change_ms > 3600000 * 2) {  // 2 hours
     brightness = 0;
     getLocalTime(&last_light_change_timeinfo);
     last_light_change_ms = millis();
@@ -556,7 +518,28 @@ void loop()
   ledcWrite(0, brightness);
   ledcWrite(1, brightness > BRIGHTNESS_STEP ? brightness : 0);
 
-  delay(10);
+  if (led_ring.in_timeout()) {
+    // While timeout is active, let the ring manage its state
+  } else if (led_ring.mode() != LEDRing::TIMEOUT && !brightness) {
+    // Turn off anytime the main lights aren't on, unless it was a timeout so we show green
+    led_ring.setMode(LEDRing::OFF);
+  } else if (mcp_found) {
+    // Not in timeout, main lights on
+    static uint32_t last_remote_tm = 0;
+    if (millis() - last_remote_tm > 500) {
+      if (mcp.digitalRead(REMOTE_BRIGHTER))
+        led_ring.setMode(LEDRing::PULSE), last_remote_tm = millis();
+      else if (mcp.digitalRead(REMOTE_DIMMER))
+        led_ring.setMode(LEDRing::CONFETTI), last_remote_tm = millis();
+      else if (mcp.digitalRead(REMOTE_WAKE))
+        led_ring.setMode(LEDRing::CANDLE), last_remote_tm = millis();
+      else if (mcp.digitalRead(REMOTE_OFF))
+        led_ring.setMode(LEDRing::OFF), last_remote_tm = millis();
+    }
+  }
+  led_ring.update();
+
+  delay(1);
 }
 
 /* --------------------------------------------------------------------------- */
