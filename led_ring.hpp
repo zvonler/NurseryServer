@@ -62,7 +62,7 @@ public:
   }
 
   bool in_timeout() const {
-    return millis() < _timeout_start_ms + TIMEOUT_DURATION;
+    return _mode == LEDRing::TIMEOUT && millis() < _timeout_start_ms + TIMEOUT_DURATION;
   }
 
 private:
