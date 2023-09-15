@@ -4,10 +4,11 @@ PROFILE = funhouse
 PROJECT = $(shell basename $(CURDIR))
 SOURCES = $(wildcard $(PROJECT)/*)
 BUILD_DIR = build
+BINFILE = $(BUILD_DIR)/$(PROJECT).ino.bin
 
 ARDUINO_CLI = arduino-cli --profile $(PROFILE)
 
-compile: $(SOURCES)
+$(BINFILE): $(SOURCES)
 	$(ARDUINO_CLI) --output-dir $(BUILD_DIR) compile $(PROJECT)
 
 dump: $(CFG_FILE)
