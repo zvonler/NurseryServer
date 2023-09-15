@@ -5,7 +5,7 @@
 
    The buttons on the FunHouse map to:
      Top - increase main lights brightness
-     Middle - toggle display backlight
+     Middle - toggle timeout display on LED ring
      Bottom - decrease main lights brightness
 
    The server advertises itself at http://{hostname}.local
@@ -27,10 +27,13 @@
 
    The FunHouse A0 and A1 connections control the LED strips through MOSFETs.
 
+   The FunHouse A2 connection is used to power and control the LED ring.
+
    The FunHouse I2C connection is used to talk to MCP23008 to read the RF remote
    receiver signals.
 */
 
+#include "led_ring.hpp"
 #include <Adafruit_AHTX0.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_MCP23008.h>
@@ -41,7 +44,6 @@
 #include <WiFiClient.h>
 #include <Wire.h>
 #include <time.h>
-#include "led_ring.hpp"
 
 /* --------------------------------------------------------------------------- */
 
