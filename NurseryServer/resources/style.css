@@ -1,3 +1,11 @@
 html {
   background-color: #00539f;
 }
+
+body {
+  font-family: Arial, Helvetica, Sans-Serif;
+}
+
+.status_line {
+  margin: 10px;
+}

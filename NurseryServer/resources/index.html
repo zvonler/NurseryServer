@@ -1,10 +1,35 @@
 <html>
   <head>
+    <title>Smart Nursery Home Page</title>
     <link href="style.css" rel="stylesheet" />
   </head>
   <body>
     <script src="app.js"></script>
-Hello, world
-    <div id="time"></div>
+    <h1>Smart Nursery</h1>
+    <div>
+      <button onclick="off()">OFF</button>
+      <button onclick="dimmer()">DIMMER</button>
+      <button onclick="brighter()">BRIGHTER</button>
+      <button onclick="wake()">WAKE</button>
+      <button onclick="timeout()">TIMEOUT</button>
+    </div>
+    <div class="status_line">
+      <span id="time"></span>
+    </div>
+    <div class="status_line">
+      Lights are <span id="light_status"></span> at <span id="brightness"></span> since <span id="last_light_time"></span>
+    </div>
+    <div class="status_line">
+      Door is <span id="door_status"></span> since <span id="last_door_time"></span>
+    </div>
+    <div class="status_line">
+      Last motion detected <span id="last_motion_time"></span>
+    </div>
+    <div class="status_line">
+      Temperature <span id="temperature"></span> Humidity <span id="humidity"></span>
+    </div>
+    <div class="status_line">
+      Server Uptime <span id="server_uptime"></span>
+    </div>
   </body>
 </html>

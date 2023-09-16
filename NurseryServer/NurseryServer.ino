@@ -168,12 +168,6 @@ void handle_status() {
   doc["brightness"] = brightness;
   doc["waking_up"] = waking_up;
 
-  constexpr size_t bufsize = 1024;
-  char buf[bufsize];
-  int sec = millis() / 1000;
-  int min = sec / 60;
-  int hr = min / 60;
-
   char timestr[128];
   struct tm timeinfo;
   if (getLocalTime(&timeinfo))
@@ -182,8 +176,8 @@ void handle_status() {
 
   sensors_event_t humidity, temp;
   aht.getEvent(&humidity, &temp);
-  doc["humidity"] = humidity.relative_humidity;
-  doc["temp"] = temp.temperature * 9 / 5 + 32;
+  doc["humidity"] = int(humidity.relative_humidity);
+  doc["temperature"] = temp.temperature * 9 / 5 + 32;
 
   char motionstr[128];
   strftime(motionstr, 128, "%H:%M:%S", &last_motion_timeinfo);
@@ -197,6 +191,13 @@ void handle_status() {
   char lightstr[128];
   strftime(lightstr, 128, "%H:%M:%S", &last_light_change_timeinfo);
   doc["last_light_time"] = lightstr;
+
+  char uptime[24];
+  int sec = millis() / 1000;
+  int min = sec / 60;
+  int hr = min / 60;
+  sprintf(uptime, "% 3d:%02d:%02d", hr, min, sec);
+  doc["server_uptime"] = uptime;
 
   String json;
   serializeJson(doc, json);
