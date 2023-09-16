@@ -38,6 +38,7 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_MCP23008.h>
 #include <Adafruit_ST7789.h>
+#include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <WebServer.h>
@@ -99,35 +100,9 @@ const char* hostname = "nursery-devel";
 /* --------------------------------------------------------------------------- */
 
 void handle_root() {
-  constexpr size_t bufsize = 1024;
-  char buf[bufsize];
-  int sec = millis() / 1000;
-  int min = sec / 60;
-  int hr = min / 60;
-
-  char timestr[128];
-  struct tm timeinfo;
-  if (getLocalTime(&timeinfo))
-    strftime(timestr, 128, "%A %d %B %Y %H:%M:%S", &timeinfo);
-
-  sensors_event_t humidity, temp;
-  aht.getEvent(&humidity, &temp);
-
-  char motionstr[128];
-  strftime(motionstr, 128, "%H:%M:%S", &last_motion_timeinfo);
-
-  char doorstr[128];
-  strftime(doorstr, 128, "%H:%M:%S", &last_door_change_timeinfo);
-
-  char lightstr[128];
-  strftime(lightstr, 128, "%H:%M:%S", &last_light_change_timeinfo);
-
-  const char* path = "/index.html";
-
-  File file = LittleFS.open(path, "r");
+  File file = LittleFS.open("/index.html", "r");
   if(!file || file.isDirectory()){
-    snprintf(buf, bufsize, "- failed to open file for reading");
-    server.send(200, "text/html", buf);
+    server.send(404, "text/plain", "File not found");
   } else {
     size_t sent = server.streamFile(file, "text/html");
     file.close();
@@ -185,6 +160,47 @@ void handleNotFound() {
     server.streamFile(file, content_type);
     file.close();
   }
+}
+
+void handle_status() {
+  StaticJsonDocument<1024> doc;
+
+  doc["brightness"] = brightness;
+  doc["waking_up"] = waking_up;
+
+  constexpr size_t bufsize = 1024;
+  char buf[bufsize];
+  int sec = millis() / 1000;
+  int min = sec / 60;
+  int hr = min / 60;
+
+  char timestr[128];
+  struct tm timeinfo;
+  if (getLocalTime(&timeinfo))
+    strftime(timestr, 128, "%A %d %B %Y %H:%M:%S", &timeinfo);
+  doc["time"] = timestr;
+
+  sensors_event_t humidity, temp;
+  aht.getEvent(&humidity, &temp);
+  doc["humidity"] = humidity.relative_humidity;
+  doc["temp"] = temp.temperature * 9 / 5 + 32;
+
+  char motionstr[128];
+  strftime(motionstr, 128, "%H:%M:%S", &last_motion_timeinfo);
+  doc["last_motion_time"] = motionstr;
+
+  char doorstr[128];
+  strftime(doorstr, 128, "%H:%M:%S", &last_door_change_timeinfo);
+  doc["last_door_time"] = doorstr;
+  doc["door_status"] = door_closed ? "CLOSED" : "OPEN";
+
+  char lightstr[128];
+  strftime(lightstr, 128, "%H:%M:%S", &last_light_change_timeinfo);
+  doc["last_light_time"] = lightstr;
+
+  String json;
+  serializeJson(doc, json);
+  server.send(200, "text/json", json);
 }
 
 /* --------------------------------------------------------------------------- */
@@ -350,6 +366,7 @@ void setup() {
   server.on("/brighter", handle_brighter);
   server.on("/dimmer", handle_dimmer);
   server.on("/off", handle_off);
+  server.on("/status", handle_status);
   server.on("/wake", handle_wake);
   server.onNotFound(handleNotFound);
   server.begin();

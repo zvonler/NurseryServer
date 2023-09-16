@@ -10,5 +10,6 @@ profiles:
       - Adafruit MCP23008 library (2.1.0)
       - Adafruit ST7735 and ST7789 Library (1.7.4)
       - Adafruit Unified Sensor (1.1.4)
+      - ArduinoJson (6.21.3)
       - FastLED (3.6.0)
       - LittleFS_esp32 (1.0.6)
