@@ -9,6 +9,7 @@ RESOURCES := $(wildcard $(RESOURCES_DIR)/*)
 BUILD_DIR = build
 BINFILE = $(BUILD_DIR)/$(PROJECT).ino.bin
 FS_IMAGE = $(BUILD_DIR)/resources.lfs
+MKLITTLEFS = $(BUILD_DIR)/mklittlefs/mklittlefs
 
 PYTHON = /opt/homebrew/bin/python3.11
 VENV_DIR = $(BUILD_DIR)/venv
@@ -32,9 +33,15 @@ compile: $(BINFILE)
 dump: $(CFG_FILE)
 	arduino-cli config dump
 
-$(FS_IMAGE): venv $(RESOURCES)
-	mklittlefs -c $(RESOURCES_DIR) -s 3014656 $(FS_IMAGE)
+$(FS_IMAGE): venv $(RESOURCES) $(MKLITTLEFS)
+	$(MKLITTLEFS) -c $(RESOURCES_DIR) -s 3014656 $(FS_IMAGE)
 	#$(VENV_DIR)/bin/littlefs_create -i $(FS_IMAGE) -s $(RESOURCES_DIR) -c 736
+
+$(MKLITTLEFS):
+	@if [ ! -d $(BUILD_DIR)/mklittlefs ]; then \
+	git clone git@github.com:earlephilhower/mklittlefs.git $(BUILD_DIR)/mklittlefs; \
+	cd $(BUILD_DIR)/mklittlefs && git submodule update --init && make dist; \
+	fi
 
 properties:
 	$(ARDUINO_CLI) compile --show-properties $(PROJECT)
