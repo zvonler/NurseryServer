@@ -39,6 +39,7 @@
 #include <Adafruit_MCP23008.h>
 #include <Adafruit_ST7789.h>
 #include <ESPmDNS.h>
+#include <LittleFS.h>
 #include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
@@ -93,7 +94,7 @@ const long gmtOffset_sec = -6 * 3600;
 const int daylightOffset_sec = 3600;
 
 // Change for "release" builds
-const char* hostname = "nursery-dev";
+const char* hostname = "nursery-devel";
 
 /* --------------------------------------------------------------------------- */
 
@@ -121,34 +122,16 @@ void handle_root() {
   char lightstr[128];
   strftime(lightstr, 128, "%H:%M:%S", &last_light_change_timeinfo);
 
-  snprintf(buf, bufsize,
-           "<html>\
-  <head>\
-    <meta http-equiv='refresh' content='15'/>\
-    <title>Smart Nursery Home Page</title>\
-    <style>\
-      body { background-color: #cccccc; font-family: Arial, Helvetica, Sans-Serif; Color: #000088; }\
-    </style>\
-  </head>\
-  <body>\
-    <h1>Smart Nursery</h1>\
-    <p><a href=/off>OFF</a>    <a href=/dimmer>DIMMER</a>    <a href=/brighter>BRIGHTER</a>    <a href=/wake>WAKE</a></p>\
-    <p>%s</p>\
-    <p>Lights are: %s at %d / %d since %s</p>\
-    <p>Door is %s since %s</p>\
-    <p>Last motion detected: %s</p>\
-    <p>Temperature: %.0f F    Humidity: %.0f %%</p>\
-    <p>Server Uptime: % 3d:%02d:%02d</p>\
-  </body>\
-</html>",
+  const char* path = "/index.html";
 
-           timestr,
-           brightness > 0 ? "ON" : "OFF", brightness, MAX_BRIGHTNESS, lightstr,
-           door_closed ? "CLOSED" : "OPEN", doorstr,
-           motionstr,
-           temp.temperature * 9 / 5 + 32, humidity.relative_humidity,
-           hr, min % 60, sec % 60);
-  server.send(200, "text/html", buf);
+  File file = LittleFS.open(path, "r");
+  if(!file || file.isDirectory()){
+    snprintf(buf, bufsize, "- failed to open file for reading");
+    server.send(200, "text/html", buf);
+  } else {
+    size_t sent = server.streamFile(file, "text/html");
+    file.close();
+  }
 }
 
 void send_client_redirect(const char* title) {
@@ -189,20 +172,19 @@ void handle_wake() {
 }
 
 void handleNotFound() {
-  String message = "File Not Found\n\n";
-  message += "URI: ";
-  message += server.uri();
-  message += "\nMethod: ";
-  message += (server.method() == HTTP_GET) ? "GET" : "POST";
-  message += "\nArguments: ";
-  message += server.args();
-  message += "\n";
-
-  for (uint8_t i = 0; i < server.args(); i++) {
-    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
+  String uri = server.uri();
+  File file = LittleFS.open(uri, "r");
+  if (!file || file.isDirectory()) {
+    server.send(404, "text/plain", "File not found");
+  } else {
+    String content_type = "application/octet-stream";
+    if (uri.endsWith(".html"))
+      content_type = "text/html";
+    else if (uri.endsWith(".css"))
+      content_type = "text/css";
+    server.streamFile(file, content_type);
+    file.close();
   }
-
-  server.send(404, "text/plain", message);
 }
 
 /* --------------------------------------------------------------------------- */
@@ -228,6 +210,9 @@ void update_tft_time() {
 LEDRing led_ring;
 
 void setup() {
+  Serial.begin(115200);
+  Serial.println("here");
+
   pinMode(LED_BUILTIN, OUTPUT);
 
   pinMode(BUTTON_DOWN, INPUT_PULLDOWN);
@@ -349,6 +334,18 @@ void setup() {
     tft.println("Not found");
   }
 
+  tft.setCursor(0, 100);
+  tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
+  tft.print("LFS: ");
+  if(LittleFS.begin(false)) {
+    tft.setCursor(0, 100);
+    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
+    tft.print("LFS: Mounted");
+  } else {
+    tft.setTextColor(ST77XX_RED, BG_COLOR);
+    tft.println("Mount failed");
+  }
+
   server.on("/", handle_root);
   server.on("/brighter", handle_brighter);
   server.on("/dimmer", handle_dimmer);
@@ -366,6 +363,9 @@ void setup() {
 }
 
 /* --------------------------------------------------------------------------- */
+
+void readFile(fs::FS &fs, const char * path){
+}
 
 uint32_t last_light_change_ms = 0;
 
@@ -470,7 +470,7 @@ void loop() {
       tft.print(" %");
       tft.println("              ");
 
-      tft.setCursor(0, 100);
+      tft.setCursor(0, 120);
       tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
       tft.print("Ambient light: ");
       uint16_t analogread = analogRead(A3);
@@ -478,7 +478,7 @@ void loop() {
       tft.print(analogread);
       tft.println("    ");
 
-      tft.setCursor(0, 120);
+      tft.setCursor(0, 140);
       tft.setTextColor(ST77XX_GREEN, BG_COLOR);
       tft.print("LED level:");
       char ledstr[10];
