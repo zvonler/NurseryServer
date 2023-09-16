@@ -34,14 +34,14 @@
 */
 
 #include "led_ring.hpp"
-#include <Adafruit_AHTX0.h>
+#include "led_strip_controller.h"
+#include "nursery_monitor.h"
+#include "nursery_web_server.h"
 #include <Adafruit_GFX.h>
-#include <Adafruit_MCP23008.h>
 #include <Adafruit_ST7789.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
-#include <WebServer.h>
 #include <WiFi.h>
 #include <WiFiClient.h>
 #include <Wire.h>
@@ -55,114 +55,15 @@ const char* password = SECRET_PASS;
 
 #define BG_COLOR ST77XX_BLACK
 
-// MCP pin assignments
-#define REMOTE_BRIGHTER 5
-#define REMOTE_DIMMER 4
-#define REMOTE_OFF 6
-#define REMOTE_WAKE 7
-#define DOOR_SENSOR 3
-
-Adafruit_MCP23008 mcp;
 Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RESET);
-Adafruit_AHTX0 aht;
-WebServer server(80);
-
-/*---------------------------------------------------------------------------*/
-
-// Manages two PWM channels that control 12v LED strips.
-class LEDStripController {
-    static const int LED_REFRESH_HZ = 40000;
-    static const int LED_RESOLUTION_BITS = 8;
-    static const int MAX_BRIGHTNESS = 250;
-    static const int INITIAL_BRIGHTNESS = 20;
-    static const int BRIGHTNESS_STEP = 50;
-
-    uint8_t _pins[2];
-    bool _waking_up = false;
-    uint32_t _wakeup_start_tm = 0;
-    int _brightness = 0;
-    struct tm _last_light_change_timeinfo;
-    uint32_t _last_light_change_ms = 0;
-
-public:
-    LEDStripController(uint8_t pin0, uint8_t pin1)
-	: _pins({ pin0, pin1 })
-    { }
-
-    void init() {
-      ledcAttachPin(_pins[0], 0);
-      ledcSetup(0, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
-
-      ledcAttachPin(_pins[1], 1);
-      ledcSetup(1, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
-    }
-
-    void update() {
-	if (_waking_up) {
-	    _brightness = (millis() - wakeup_start_tm) / 2000;
-	    if (_brightness >= 2 * BRIGHTNESS_STEP)
-		_waking_up = false;
-	    getLocalTime(&_last_light_change_timeinfo);
-	} else if (_brightness && millis() - _last_light_change_ms > 3600000 * 2) {  // 2 hours
-	    _brightness = 0;
-	    getLocalTime(&_last_light_change_timeinfo);
-	    _last_light_change_ms = millis();
-	}
-
-	ledcWrite(0, _brightness);
-	ledcWrite(1, _brightness > BRIGHTNESS_STEP ? _brightness : 0);
-    }
-
-    void increase_brightness() {
-	if (!_brightness)
-	    _brightness = INITIAL_BRIGHTNESS;
-	else
-	    _brightness += BRIGHTNESS_STEP;
-
-	if (_brightness > MAX_BRIGHTNESS)
-	    _brightness = MAX_BRIGHTNESS;
-	_waking_up = false;
-	getLocalTime(&_last_light_change_timeinfo);
-	_last_light_change_ms = millis();
-    }
-
-    void decrease_brightness() {
-	_brightness -= BRIGHTNESS_STEP;
-	if (_brightness < 0)
-	    _brightness = 0;
-	_waking_up = false;
-	getLocalTime(&_last_light_change_timeinfo);
-	_last_light_change_ms = millis();
-    }
-
-    void begin_wake() {
-	_waking_up = true;
-	wakeup_start_tm = millis();
-	_last_light_change_ms = millis();
-    }
-
-    void turn_off() {
-	_brightness = 0;
-	_waking_up = false;
-	getLocalTime(&_last_light_change_timeinfo);
-    }
-
-    struct tm const& last_light_change_timeinfo() const {
-	return _last_light_change_timeinfo;
-    }
-};
-
 LEDStripController strip_controller(A0, A1);
+LEDRing led_ring;
+NurseryMonitor monitor(strip_controller, led_ring);
+NurseryWebServer web_server(strip_controller, LittleFS, monitor);
 
 /*---------------------------------------------------------------------------*/
 
 bool backlight = true;
-bool pir_triggered = false;
-bool mcp_found = false;
-uint32_t last_direct_input_tm = 0;
-bool door_closed;
-struct tm last_door_change_timeinfo;
-struct tm last_motion_timeinfo;
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -6 * 3600;
@@ -171,98 +72,7 @@ const int daylightOffset_sec = 3600;
 // Change for "release" builds
 const char* hostname = "nursery-devel";
 
-/* --------------------------------------------------------------------------- */
-
-void handle_root() {
-  File file = LittleFS.open("/index.html", "r");
-  if(!file || file.isDirectory()){
-    server.send(404, "text/plain", "File not found");
-  } else {
-    size_t sent = server.streamFile(file, "text/html");
-    file.close();
-  }
-}
-
-void handle_brighter() {
-  strip_controller.increase_brightness();
-  server.send(200, "text/plain", "OK");
-}
-
-void handle_dimmer() {
-  strip_controller.decrease_brightness();
-  server.send(200, "text/plain", "OK");
-}
-
-void handle_off() {
-  strip_controller.turn_off();
-  server.send(200, "text/plain", "OK");
-}
-
-void handle_wake() {
-  strip_controller.begin_wake();
-  server.send(200, "text/plain", "OK");
-}
-
-void handleNotFound() {
-  String uri = server.uri();
-  File file = LittleFS.open(uri, "r");
-  if (!file || file.isDirectory()) {
-    server.send(404, "text/plain", "File not found");
-  } else {
-    String content_type = "application/octet-stream";
-    if (uri.endsWith(".html"))
-      content_type = "text/html";
-    else if (uri.endsWith(".css"))
-      content_type = "text/css";
-    server.streamFile(file, content_type);
-    file.close();
-  }
-}
-
-void handle_status() {
-  StaticJsonDocument<1024> doc;
-
-  doc["brightness"] = brightness;
-  doc["waking_up"] = waking_up;
-
-  char timestr[128];
-  struct tm timeinfo;
-  if (getLocalTime(&timeinfo))
-    strftime(timestr, 128, "%A %d %B %Y %H:%M:%S", &timeinfo);
-  doc["time"] = timestr;
-
-  sensors_event_t humidity, temp;
-  aht.getEvent(&humidity, &temp);
-  doc["humidity"] = int(humidity.relative_humidity);
-  doc["temperature"] = int(temp.temperature * 9 / 5 + 32);
-
-  char motionstr[128];
-  strftime(motionstr, 128, "%H:%M:%S", &last_motion_timeinfo);
-  doc["last_motion_time"] = motionstr;
-
-  char doorstr[128];
-  strftime(doorstr, 128, "%H:%M:%S", &last_door_change_timeinfo);
-  doc["last_door_time"] = doorstr;
-  doc["door_status"] = door_closed ? "CLOSED" : "OPEN";
-
-  char lightstr[128];
-  strftime(lightstr, 128, "%H:%M:%S", &strip_controller.last_light_change_timeinfo());
-  doc["last_light_time"] = lightstr;
-
-  char uptime[24];
-  int sec = millis() / 1000;
-  int min = sec / 60;
-  int hr = min / 60;
-  sprintf(uptime, "% 3d:%02d:%02d", hr, min % 60, sec % 60);
-  doc["server_uptime"] = uptime;
-
-  String json;
-  serializeJson(doc, json);
-  server.send(200, "text/json", json);
-}
-
 /*---------------------------------------------------------------------------*/
-
 
 void update_tft_time() {
   struct tm timeinfo;
@@ -282,22 +92,14 @@ void update_tft_time() {
   }
 }
 
-LEDRing led_ring;
-
 void setup() {
   Serial.begin(115200);
-  Serial.println("here");
 
   pinMode(LED_BUILTIN, OUTPUT);
 
-  pinMode(BUTTON_DOWN, INPUT_PULLDOWN);
-  pinMode(BUTTON_SELECT, INPUT_PULLDOWN);
-  pinMode(BUTTON_UP, INPUT_PULLDOWN);
-  pinMode(SENSOR_PIR, INPUT);
-  pinMode(SENSOR_LIGHT, INPUT);
-  analogReadResolution(10);
+  monitor.init();
 
-    strip_controller.init();
+strip_controller.init();
 
   tft.init(240, 240);  // Initialize ST7789 screen
   pinMode(TFT_BACKLIGHT, OUTPUT);
@@ -313,7 +115,7 @@ void setup() {
   tft.setTextColor(ST77XX_YELLOW);
   tft.print("AHT20: ");
 
-  if (!aht.begin()) {
+  if (!monitor.aht_begin()) {
     tft.setTextColor(ST77XX_RED);
     tft.println("FAIL!");
     while (1) delay(100);
@@ -379,24 +181,7 @@ void setup() {
   tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
   tft.print("MCP: ");
 
-  if (mcp.begin()) {
-    mcp_found = true;
-
-    mcp.pinMode(REMOTE_BRIGHTER, INPUT);
-    mcp.pullUp(REMOTE_BRIGHTER, LOW);
-
-    mcp.pinMode(REMOTE_DIMMER, INPUT);
-    mcp.pullUp(REMOTE_DIMMER, LOW);
-
-    mcp.pinMode(REMOTE_OFF, INPUT);
-    mcp.pullUp(REMOTE_OFF, LOW);
-
-    mcp.pinMode(REMOTE_WAKE, INPUT);
-    mcp.pullUp(REMOTE_WAKE, LOW);
-
-    mcp.pinMode(DOOR_SENSOR, INPUT);
-    mcp.pullUp(DOOR_SENSOR, HIGH);
-
+  if (monitor.mcp_begin()) {
     tft.setCursor(0, 80);
     tft.setTextColor(ST77XX_GREEN, BG_COLOR);
     tft.println("MCP: Found");
@@ -417,19 +202,11 @@ void setup() {
     tft.println("Mount failed");
   }
 
-  server.on("/", handle_root);
-  server.on("/brighter", handle_brighter);
-  server.on("/dimmer", handle_dimmer);
-  server.on("/off", handle_off);
-  server.on("/status", handle_status);
-  server.on("/wake", handle_wake);
-  server.onNotFound(handleNotFound);
-  server.begin();
+  web_server.begin();
 
   // Don't timeout screen during / after setup
-  last_direct_input_tm = millis();
-
-  door_closed = !mcp.digitalRead(DOOR_SENSOR);
+  monitor.reset_direct_input_timeout();
+  monitor.check_door_sensor();
 
   led_ring.init();
 }
@@ -442,128 +219,55 @@ void set_backlight(bool state) {
   digitalWrite(TFT_BACKLIGHT, backlight);
 }
 
-void check_for_motion() {
-  if (digitalRead(SENSOR_PIR)) {
-    pir_triggered = true;
-  } else {
-    if (pir_triggered) {
-      pir_triggered = false;
-      getLocalTime(&last_motion_timeinfo);
-    }
-  }
-}
-
 void loop() {
-  digitalWrite(LED_BUILTIN, millis() % 1024 < 512);
+    digitalWrite(LED_BUILTIN, millis() % 1024 < 512);
 
-  server.handleClient();
+    web_server.handleClient();
 
-  check_for_motion();
+    monitor.check_for_motion();
+    monitor.check_door_sensor();
+    if (monitor.check_for_button_input()) {
+	if (!backlight)
+	    set_backlight(true);
+    } else if (backlight && monitor.direct_input_timeout_past())
+	set_backlight(false);
 
-  if (digitalRead(BUTTON_DOWN)) {
-    if (!backlight)
-      set_backlight(true);
-    decrease_brightness();
-    while (digitalRead(BUTTON_DOWN))
-      ;
-    last_direct_input_tm = millis();
-  }
-
-  if (digitalRead(BUTTON_SELECT)) {
-    if (!backlight)
-      set_backlight(true);
-    if (led_ring.mode() != LEDRing::TIMEOUT)
-      led_ring.setMode(LEDRing::TIMEOUT);
-    else
-      led_ring.setMode(LEDRing::OFF);
-    while (digitalRead(BUTTON_SELECT))
-      ;
-    last_direct_input_tm = millis();
-  }
-
-  if (digitalRead(BUTTON_UP)) {
-    if (!backlight)
-      set_backlight(true);
-    increase_brightness();
-    while (digitalRead(BUTTON_UP))
-      ;
-    last_direct_input_tm = millis();
-  }
-
-  EVERY_N_MILLISECONDS(500) {
-    sensors_event_t humidity, temp;
-    aht.getEvent(&humidity, &temp);
+    monitor.update_outputs();
 
     if (backlight) {
-      tft.setCursor(0, 0);
-      tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-      tft.print("AHT20: ");
-      tft.print(temp.temperature * 9 / 5 + 32, 0);
-      tft.print(" F ");
-      tft.print(humidity.relative_humidity, 0);
-      tft.print(" %");
-      tft.println("              ");
+	EVERY_N_MILLISECONDS(500) {
+	    sensors_event_t humidity, temp;
+	    monitor.getAHTEvent(humidity, temp);
 
-      tft.setCursor(0, 120);
-      tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
-      tft.print("Ambient light: ");
-      uint16_t analogread = analogRead(A3);
-      tft.setTextColor(ST77XX_WHITE, BG_COLOR);
-      tft.print(analogread);
-      tft.println("    ");
+	    tft.setCursor(0, 0);
+	    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
+	    tft.print("AHT20: ");
+	    tft.print(temp.temperature * 9 / 5 + 32, 0);
+	    tft.print(" F ");
+	    tft.print(humidity.relative_humidity, 0);
+	    tft.print(" %");
+	    tft.println("              ");
 
-      tft.setCursor(0, 140);
-      tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-      tft.print("LED level:");
-      char ledstr[10];
-      snprintf(ledstr, 10, "% 3d/%d ", brightness, MAX_BRIGHTNESS);
-      tft.println(ledstr);
+	    tft.setCursor(0, 120);
+	    tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
+	    tft.print("Ambient light: ");
+	    uint16_t analogread = analogRead(A3);
+	    tft.setTextColor(ST77XX_WHITE, BG_COLOR);
+	    tft.print(analogread);
+	    tft.println("    ");
 
-      update_tft_time();
+	    tft.setCursor(0, 140);
+	    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
+	    tft.print("LED level:");
+	    char ledstr[10];
+	    snprintf(ledstr, 10, "% 3d/%d ", strip_controller.brightness(), strip_controller.max_brightness());
+	    tft.println(ledstr);
+
+	    update_tft_time();
+	}
     }
 
-    if (mcp_found) {
-      if (mcp.digitalRead(DOOR_SENSOR)) {
-        if (door_closed) {
-          getLocalTime(&last_door_change_timeinfo);
-          door_closed = false;
-        }
-      } else {
-        if (!door_closed) {
-          getLocalTime(&last_door_change_timeinfo);
-          door_closed = true;
-        }
-      }
-    }
-  }
-
-  if (backlight && millis() - last_direct_input_tm > 10000)
-    set_backlight(false);
-
-    strip_controller.update();
-
-  if (led_ring.in_timeout()) {
-    // While timeout is active, let the ring manage its state
-  } else if (led_ring.mode() != LEDRing::TIMEOUT && !brightness) {
-    // Turn off anytime the main lights aren't on, unless it was a timeout so we show green
-    led_ring.setMode(LEDRing::OFF);
-  } else if (mcp_found) {
-    // Not in timeout, main lights on
-    static uint32_t last_remote_tm = 0;
-    if (millis() - last_remote_tm > 500) {
-      if (mcp.digitalRead(REMOTE_BRIGHTER))
-        led_ring.setMode(LEDRing::PULSE), last_remote_tm = millis();
-      else if (mcp.digitalRead(REMOTE_DIMMER))
-        led_ring.setMode(LEDRing::CONFETTI), last_remote_tm = millis();
-      else if (mcp.digitalRead(REMOTE_WAKE))
-        led_ring.setMode(LEDRing::CANDLE), last_remote_tm = millis();
-      else if (mcp.digitalRead(REMOTE_OFF))
-        led_ring.setMode(LEDRing::OFF), last_remote_tm = millis();
-    }
-  }
-  led_ring.update();
-
-  delay(1);
+    delay(1);
 }
 
 /* --------------------------------------------------------------------------- */

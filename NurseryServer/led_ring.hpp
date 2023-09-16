@@ -1,4 +1,7 @@
 
+#ifndef led_ring_hpp
+#define led_ring_hpp
+
 #include <FastLED.h>
 
 FASTLED_USING_NAMESPACE
@@ -16,7 +19,6 @@ public:
 private:
   static const int NUM_LEDS = 36;
   static const int BRIGHTNESS = 40;
-  static const int DATA_PIN = A2;
   static const int FRAMES_PER_SECOND = 120;
   static const uint32_t TIMEOUT_DURATION = 180000;
 
@@ -32,7 +34,7 @@ public:
   }
 
   void init() {
-    FastLED.addLeds<WS2811, DATA_PIN, GRB>(_leds_with_dummy, NUM_LEDS + 1).setCorrection(TypicalLEDStrip);
+    FastLED.addLeds<WS2811, A2, GRB>(_leds_with_dummy, NUM_LEDS + 1).setCorrection(TypicalLEDStrip);
     FastLED.setBrightness(BRIGHTNESS);
   }
 
@@ -231,3 +233,5 @@ private:
     }
   }
 };
+
+#endif
