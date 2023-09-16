@@ -47,11 +47,13 @@
 #include <Wire.h>
 #include <time.h>
 
+/* ------ File included next should define SECRET_SSID and SECRET_PASS ------- */
+#include "arduino_secrets.h"
+const char* ssid = SECRET_SSID;
+const char* password = SECRET_PASS;
 /* --------------------------------------------------------------------------- */
 
 #define BG_COLOR ST77XX_BLACK
-#define LED_CHANNEL_0 A0
-#define LED_CHANNEL_1 A1
 
 #define LED_REFRESH_HZ 40000
 #define LED_RESOLUTION_BITS 8
@@ -59,16 +61,17 @@
 #define INITIAL_BRIGHTNESS 20
 #define BRIGHTNESS_STEP 50
 
-Adafruit_MCP23008 mcp;
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RESET);
-Adafruit_AHTX0 aht;
-
 // MCP pin assignments
 #define REMOTE_BRIGHTER 5
 #define REMOTE_DIMMER 4
 #define REMOTE_OFF 6
 #define REMOTE_WAKE 7
 #define DOOR_SENSOR 3
+
+Adafruit_MCP23008 mcp;
+Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RESET);
+Adafruit_AHTX0 aht;
+WebServer server(80);
 
 bool waking_up = false;
 uint32_t wakeup_start_tm = 0;
@@ -81,14 +84,7 @@ bool door_closed;
 struct tm last_light_change_timeinfo;
 struct tm last_door_change_timeinfo;
 struct tm last_motion_timeinfo;
-
-// -------- File included below should define SECRET_SSID and SECRET_PASS --------
-#include "arduino_secrets.h"
-const char* ssid = SECRET_SSID;
-const char* password = SECRET_PASS;
-// -------------------------------------------------------------------------------
-
-WebServer server(80);
+uint32_t last_light_change_ms = 0;
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -6 * 3600;
@@ -109,41 +105,24 @@ void handle_root() {
   }
 }
 
-void send_client_redirect(const char* title) {
-  constexpr size_t bufsize = 1024;
-  char buf[bufsize];
-
-  snprintf(buf, bufsize, "\
-    <html>\
-      <head>\
-        <meta http-equiv='refresh' content=\"1; URL='/'\">\
-        <title>%s</title>\
-      </head>\
-    </html>\
-  ",
-           title);
-
-  server.send(200, "text/html", buf);
-}
-
 void handle_brighter() {
   increase_brightness();
-  send_client_redirect("Increasing brightness");
+  server.send(200, "text/plain", "OK");
 }
 
 void handle_dimmer() {
   decrease_brightness();
-  send_client_redirect("Decreasing brightness");
+  server.send(200, "text/plain", "OK");
 }
 
 void handle_off() {
   turn_off();
-  send_client_redirect("Turning OFF");
+  server.send(200, "text/plain", "OK");
 }
 
 void handle_wake() {
   begin_wake();
-  send_client_redirect("Waking up");
+  server.send(200, "text/plain", "OK");
 }
 
 void handleNotFound() {
@@ -239,10 +218,10 @@ void setup() {
   pinMode(SENSOR_LIGHT, INPUT);
   analogReadResolution(10);
 
-  ledcAttachPin(LED_CHANNEL_0, 0);
+  ledcAttachPin(A0, 0);
   ledcSetup(0, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
 
-  ledcAttachPin(LED_CHANNEL_1, 1);
+  ledcAttachPin(A1, 1);
   ledcSetup(1, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
 
   tft.init(240, 240);  // Initialize ST7789 screen
@@ -381,11 +360,6 @@ void setup() {
 }
 
 /* --------------------------------------------------------------------------- */
-
-void readFile(fs::FS &fs, const char * path){
-}
-
-uint32_t last_light_change_ms = 0;
 
 void increase_brightness() {
   if (!brightness)
