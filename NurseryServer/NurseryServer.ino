@@ -33,7 +33,7 @@
    receiver signals.
 */
 
-#include "led_ring.hpp"
+#include "led_ring.h"
 #include "led_strip_controller.h"
 #include "nursery_monitor.h"
 #include "nursery_web_server.h"

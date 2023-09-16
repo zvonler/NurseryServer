@@ -1,6 +1,6 @@
 
-#ifndef led_ring_hpp
-#define led_ring_hpp
+#ifndef led_ring_h
+#define led_ring_h
 
 #include <FastLED.h>
 

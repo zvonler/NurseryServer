@@ -2,7 +2,7 @@
 #ifndef nursery_monitor_h
 #define nursery_monitor_h
 
-#include "led_ring.hpp"
+#include "led_ring.h"
 #include "led_strip_controller.h"
 #include <Adafruit_AHTX0.h>
 #include <Adafruit_MCP23008.h>
