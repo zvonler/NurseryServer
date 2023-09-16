@@ -9,3 +9,11 @@ body {
 .status_line {
   margin: 10px;
 }
+
+.show {
+  display: block;
+}
+
+.hide {
+  display: none;
+}
