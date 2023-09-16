@@ -55,12 +55,6 @@ const char* password = SECRET_PASS;
 
 #define BG_COLOR ST77XX_BLACK
 
-#define LED_REFRESH_HZ 40000
-#define LED_RESOLUTION_BITS 8
-#define MAX_BRIGHTNESS 250
-#define INITIAL_BRIGHTNESS 20
-#define BRIGHTNESS_STEP 50
-
 // MCP pin assignments
 #define REMOTE_BRIGHTER 5
 #define REMOTE_DIMMER 4
@@ -73,18 +67,102 @@ Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RESET);
 Adafruit_AHTX0 aht;
 WebServer server(80);
 
-bool waking_up = false;
-uint32_t wakeup_start_tm = 0;
-int brightness = 0;
+/*---------------------------------------------------------------------------*/
+
+// Manages two PWM channels that control 12v LED strips.
+class LEDStripController {
+    static const int LED_REFRESH_HZ = 40000;
+    static const int LED_RESOLUTION_BITS = 8;
+    static const int MAX_BRIGHTNESS = 250;
+    static const int INITIAL_BRIGHTNESS = 20;
+    static const int BRIGHTNESS_STEP = 50;
+
+    uint8_t _pins[2];
+    bool _waking_up = false;
+    uint32_t _wakeup_start_tm = 0;
+    int _brightness = 0;
+    struct tm _last_light_change_timeinfo;
+    uint32_t _last_light_change_ms = 0;
+
+public:
+    LEDStripController(uint8_t pin0, uint8_t pin1)
+	: _pins({ pin0, pin1 })
+    { }
+
+    void init() {
+      ledcAttachPin(_pins[0], 0);
+      ledcSetup(0, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
+
+      ledcAttachPin(_pins[1], 1);
+      ledcSetup(1, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
+    }
+
+    void update() {
+	if (_waking_up) {
+	    _brightness = (millis() - wakeup_start_tm) / 2000;
+	    if (_brightness >= 2 * BRIGHTNESS_STEP)
+		_waking_up = false;
+	    getLocalTime(&_last_light_change_timeinfo);
+	} else if (_brightness && millis() - _last_light_change_ms > 3600000 * 2) {  // 2 hours
+	    _brightness = 0;
+	    getLocalTime(&_last_light_change_timeinfo);
+	    _last_light_change_ms = millis();
+	}
+
+	ledcWrite(0, _brightness);
+	ledcWrite(1, _brightness > BRIGHTNESS_STEP ? _brightness : 0);
+    }
+
+    void increase_brightness() {
+	if (!_brightness)
+	    _brightness = INITIAL_BRIGHTNESS;
+	else
+	    _brightness += BRIGHTNESS_STEP;
+
+	if (_brightness > MAX_BRIGHTNESS)
+	    _brightness = MAX_BRIGHTNESS;
+	_waking_up = false;
+	getLocalTime(&_last_light_change_timeinfo);
+	_last_light_change_ms = millis();
+    }
+
+    void decrease_brightness() {
+	_brightness -= BRIGHTNESS_STEP;
+	if (_brightness < 0)
+	    _brightness = 0;
+	_waking_up = false;
+	getLocalTime(&_last_light_change_timeinfo);
+	_last_light_change_ms = millis();
+    }
+
+    void begin_wake() {
+	_waking_up = true;
+	wakeup_start_tm = millis();
+	_last_light_change_ms = millis();
+    }
+
+    void turn_off() {
+	_brightness = 0;
+	_waking_up = false;
+	getLocalTime(&_last_light_change_timeinfo);
+    }
+
+    struct tm const& last_light_change_timeinfo() const {
+	return _last_light_change_timeinfo;
+    }
+};
+
+LEDStripController strip_controller(A0, A1);
+
+/*---------------------------------------------------------------------------*/
+
 bool backlight = true;
 bool pir_triggered = false;
 bool mcp_found = false;
 uint32_t last_direct_input_tm = 0;
 bool door_closed;
-struct tm last_light_change_timeinfo;
 struct tm last_door_change_timeinfo;
 struct tm last_motion_timeinfo;
-uint32_t last_light_change_ms = 0;
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -6 * 3600;
@@ -106,22 +184,22 @@ void handle_root() {
 }
 
 void handle_brighter() {
-  increase_brightness();
+  strip_controller.increase_brightness();
   server.send(200, "text/plain", "OK");
 }
 
 void handle_dimmer() {
-  decrease_brightness();
+  strip_controller.decrease_brightness();
   server.send(200, "text/plain", "OK");
 }
 
 void handle_off() {
-  turn_off();
+  strip_controller.turn_off();
   server.send(200, "text/plain", "OK");
 }
 
 void handle_wake() {
-  begin_wake();
+  strip_controller.begin_wake();
   server.send(200, "text/plain", "OK");
 }
 
@@ -168,7 +246,7 @@ void handle_status() {
   doc["door_status"] = door_closed ? "CLOSED" : "OPEN";
 
   char lightstr[128];
-  strftime(lightstr, 128, "%H:%M:%S", &last_light_change_timeinfo);
+  strftime(lightstr, 128, "%H:%M:%S", &strip_controller.last_light_change_timeinfo());
   doc["last_light_time"] = lightstr;
 
   char uptime[24];
@@ -183,7 +261,8 @@ void handle_status() {
   server.send(200, "text/json", json);
 }
 
-/* --------------------------------------------------------------------------- */
+/*---------------------------------------------------------------------------*/
+
 
 void update_tft_time() {
   struct tm timeinfo;
@@ -218,11 +297,7 @@ void setup() {
   pinMode(SENSOR_LIGHT, INPUT);
   analogReadResolution(10);
 
-  ledcAttachPin(A0, 0);
-  ledcSetup(0, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
-
-  ledcAttachPin(A1, 1);
-  ledcSetup(1, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
+    strip_controller.init();
 
   tft.init(240, 240);  // Initialize ST7789 screen
   pinMode(TFT_BACKLIGHT, OUTPUT);
@@ -361,39 +436,6 @@ void setup() {
 
 /* --------------------------------------------------------------------------- */
 
-void increase_brightness() {
-  if (!brightness)
-    brightness = INITIAL_BRIGHTNESS;
-  else
-    brightness += BRIGHTNESS_STEP;
-
-  if (brightness > MAX_BRIGHTNESS)
-    brightness = MAX_BRIGHTNESS;
-  waking_up = false;
-  getLocalTime(&last_light_change_timeinfo);
-  last_light_change_ms = millis();
-}
-
-void decrease_brightness() {
-  brightness -= BRIGHTNESS_STEP;
-  if (brightness < 0)
-    brightness = 0;
-  waking_up = false;
-  getLocalTime(&last_light_change_timeinfo);
-  last_light_change_ms = millis();
-}
-
-void begin_wake() {
-  waking_up = true;
-  wakeup_start_tm = millis();
-  last_light_change_ms = millis();
-}
-
-void turn_off() {
-  brightness = 0;
-  waking_up = false;
-  getLocalTime(&last_light_change_timeinfo);
-}
 
 void set_backlight(bool state) {
   backlight = state;
@@ -495,22 +537,10 @@ void loop() {
     }
   }
 
-  if (waking_up) {
-    brightness = (millis() - wakeup_start_tm) / 2000;
-    if (brightness >= 2 * BRIGHTNESS_STEP)
-      waking_up = false;
-    getLocalTime(&last_light_change_timeinfo);
-  } else if (brightness && millis() - last_light_change_ms > 3600000 * 2) {  // 2 hours
-    brightness = 0;
-    getLocalTime(&last_light_change_timeinfo);
-    last_light_change_ms = millis();
-  }
-
   if (backlight && millis() - last_direct_input_tm > 10000)
     set_backlight(false);
 
-  ledcWrite(0, brightness);
-  ledcWrite(1, brightness > BRIGHTNESS_STEP ? brightness : 0);
+    strip_controller.update();
 
   if (led_ring.in_timeout()) {
     // While timeout is active, let the ring manage its state
