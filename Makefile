@@ -19,7 +19,7 @@ FQBN := $(shell $(ARDUINO_CLI) compile --show-properties $(PROJECT) | grep build
 CHIP := $(shell echo $(FQBN) | sed -e 's/.*_//')
 BAUD = 921600
 CORE = $(HOME)/Library/Arduino15/packages/esp32/hardware/esp32/2.0.11/tools/partitions/boot_app0.bin
-UPLOAD_FQBN = esp32:esp32:esp32s2
+UPLOAD_FQBN = esp32:esp32:
 
 .PHONY: all clean compile dump properties upload
 
