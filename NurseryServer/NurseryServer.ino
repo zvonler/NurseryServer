@@ -16,6 +16,7 @@
     /off - Turns lights off
     /wake - Runs a wake cycle that brings the lights up slowly
     /status - Returns sensor and system information as JSON
+    /timeout - Toggles timeout LED ring function
 
    Status page includes:
      Current time
@@ -25,13 +26,14 @@
      Last time noise sensed
      Temperature
      Humidity
+     Timeout status
 
    The FunHouse A0 and A1 connections control the LED strips through MOSFETs.
 
    The FunHouse A2 connection is used to power and control the LED ring.
 
-   The FunHouse I2C connection is used to talk to MCP23008 to read the RF remote
-   receiver signals.
+   The FunHouse I2C connection is used to talk to an MCP23008 to read the RF
+   remote receiver signals.
 */
 
 #include "funhouse_screen.h"
@@ -39,8 +41,6 @@
 #include "led_strip_controller.h"
 #include "nursery_monitor.h"
 #include "nursery_web_server.h"
-#include <Adafruit_GFX.h>
-#include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
 #include <WiFi.h>
@@ -59,8 +59,6 @@ LEDRing led_ring;
 NurseryMonitor monitor(strip_controller, led_ring);
 NurseryWebServer web_server(strip_controller, led_ring, LittleFS, monitor);
 FunHouseScreen screen;
-
-/*---------------------------------------------------------------------------*/
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -6 * 3600;
