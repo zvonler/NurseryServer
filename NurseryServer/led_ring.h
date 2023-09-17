@@ -118,7 +118,7 @@ private:
     {
         static uint8_t red_bpm = 9;
         static uint8_t green_bpm = 7;
-        static uint8_t blue_bpm = 3;
+        static uint8_t blue_bpm = 4;
 
         uint8_t red_limit = beatsin8(9, 16, 128, 0);
         uint8_t green_limit = beatsin8(11, 16, 128, 5000);
