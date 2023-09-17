@@ -6,13 +6,20 @@
   <body>
     <script src="app.js"></script>
     <h1>Smart Nursery</h1>
-    <div>
-      <button onclick="off()">OFF</button>
-      <button onclick="dimmer()">DIMMER</button>
-      <button onclick="brighter()">BRIGHTER</button>
-      <button onclick="wake()">WAKE</button>
-      <button onclick="timeout()">TIMEOUT</button>
+    <div id="buttons" class="button_panel">
+      <div id="buttons_top_row">
+        <button id="wake_button" onclick="wake()">WAKE</button>
+      </div>
+      <div id="buttons_middle_row">
+        <button id="dimmer_button" onclick="dimmer()">DIMMER</button>
+        <button id="timeout_button" onclick="timeout()">TIMEOUT</button>
+        <button id="brighter_button" onclick="brighter()">BRIGHTER</button>
+      </div>
+      <div id="buttons_bottom_row">
+        <button id="off_button" onclick="off()">OFF</button>
+      </div>
     </div>
+    <hr/>
     <div id="placeholder" class="show">
       Waiting for status
     </div>
@@ -36,6 +43,7 @@
 	Timeout <span id="timeout"></span>
       </div>
     </div>
+    <hr/>
     <div class="footer_line">
       Server Uptime <span id="server_uptime"></span>
     </div>

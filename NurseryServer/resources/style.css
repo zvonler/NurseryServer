@@ -22,3 +22,59 @@ body {
   position: absolute;
   bottom: 0px;
 }
+
+.button_panel {
+    display: grid;
+}
+
+button {
+    width: 100px;
+    border-radius: 8px;
+    padding: 6px;
+    margin: 10px;
+}
+
+#buttons_top_row {
+    display: flex;              /* establish flex container */
+    flex-direction: column;     /* stack flex items vertically */
+    justify-content: center;    /* center items vertically, in this case */
+    align-items: center;        /* center items horizontally, in this case */
+}
+
+#buttons_middle_row {
+    display: flex;              /* establish flex container */
+    flex-direction: row;     /* stack flex items vertically */
+    justify-content: center;    /* center items vertically, in this case */
+    align-items: center;        /* center items horizontally, in this case */
+}
+
+#buttons_bottom_row {
+    display: flex;              /* establish flex container */
+    flex-direction: column;     /* stack flex items vertically */
+    justify-content: center;    /* center items vertically, in this case */
+    align-items: center;        /* center items horizontally, in this case */
+}
+
+#off_button {
+    background-color: #000000;
+    color: #ffffff;
+}
+
+#dimmer_button {
+    background-color: #333333;
+    color: #cccccc;
+}
+
+#brighter_button {
+    background-color: #cccccc;
+    color: #333333;
+}
+
+#wake_button {
+    background-color: #e67451;
+    color: #000000;
+}
+
+#timeout_button {
+    background-color: #ff0000;
+}
