@@ -52,7 +52,7 @@ upload: $(BINFILE) $(FS_IMAGE)
 	$(eval PORT=$(shell arduino-cli board list | grep $(UPLOAD_FQBN) | cut -d ' ' -f 1))
 	@if [ -n "$(PORT)" ]; then \
 	echo "Uploading to $(PORT)"; \
-	$(VENV_DIR)/bin/esptool.py --chip $(CHIP) --port /dev/cu.usbmodem01 --baud $(BAUD) \
+	$(VENV_DIR)/bin/esptool.py --chip $(CHIP) --port $(PORT) --baud $(BAUD) \
 		--before default_reset --after no_reset write_flash -z \
 		--flash_mode dio --flash_freq 80m --flash_size 4MB \
 		0x1000 "$(BUILD_DIR)/$(PROJECT).ino.bootloader.bin" \
