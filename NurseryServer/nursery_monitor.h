@@ -9,15 +9,11 @@
 #include <ArduinoJson.h>
 #include <time.h>
 
-// MCP pin assignments
-#define DOOR_SENSOR 3
-#define REMOTE_A 4
-#define REMOTE_B 5
-#define REMOTE_D 6
-#define REMOTE_C 7
-
 /*---------------------------------------------------------------------------*/
 
+/**
+ * Monitors the FunHouse sensor inputs.
+ */
 class NurseryMonitor {
     LEDStripController& _strip_controller;
     LEDRing& _ring_controller;
@@ -30,13 +26,21 @@ class NurseryMonitor {
     struct tm _last_door_change_timeinfo;
     struct tm _last_motion_timeinfo;
 
+    // MCP pin assignments
+    static const uint8_t DOOR_SENSOR = 3;
+    static const uint8_t REMOTE_A = 4;
+    static const uint8_t REMOTE_B = 5;
+    static const uint8_t REMOTE_D = 6;
+    static const uint8_t REMOTE_C = 7;
+
 public:
     NurseryMonitor(LEDStripController& strip_controller, LEDRing& ring_controller)
         : _strip_controller(strip_controller)
         , _ring_controller(ring_controller)
     { }
 
-    void init() {
+    void init()
+    {
         pinMode(BUTTON_DOWN, INPUT_PULLDOWN);
         pinMode(BUTTON_SELECT, INPUT_PULLDOWN);
         pinMode(BUTTON_UP, INPUT_PULLDOWN);
@@ -45,11 +49,10 @@ public:
         analogReadResolution(10);
     }
 
-    bool aht_begin() {
-        return _aht.begin();
-    }
+    bool aht_begin() { return _aht.begin(); }
 
-    bool mcp_begin() {
+    bool mcp_begin()
+    {
         if (_mcp.begin()) {
             _mcp_found = true;
 
@@ -71,7 +74,8 @@ public:
         return _mcp_found;
     }
 
-    void add_status(StaticJsonDocument<1024>& doc) {
+    void add_status(StaticJsonDocument<1024>& doc)
+    {
         char timestr[128];
         struct tm timeinfo;
         if (getLocalTime(&timeinfo))
@@ -107,15 +111,12 @@ public:
         }
     }
 
-    void reset_direct_input_timeout() {
-        _last_direct_input_tm = millis();
-    }
+    void reset_direct_input_timeout() { _last_direct_input_tm = millis(); }
 
-    bool direct_input_timeout_past() {
-        return millis() - _last_direct_input_tm > 10000;
-    }
+    bool direct_input_timeout_past() { return millis() - _last_direct_input_tm > 10000; }
 
-    void check_for_motion() {
+    void check_for_motion()
+    {
         if (digitalRead(SENSOR_PIR)) {
             _pir_triggered = true;
         } else {
@@ -126,7 +127,8 @@ public:
         }
     }
 
-    void check_door_sensor() {
+    void check_door_sensor()
+    {
         if (!_mcp_found) return;
 
         if (_mcp.digitalRead(DOOR_SENSOR)) {
@@ -162,17 +164,20 @@ public:
         return true;
     }
 
-    void getAHTEvent(sensors_event_t& humidity, sensors_event_t& temp) {
+    void getAHTEvent(sensors_event_t& humidity, sensors_event_t& temp)
+    {
         _aht.getEvent(&humidity, &temp);
     }
 
-    void update_outputs(uint32_t tm) {
+    void update_outputs(uint32_t tm)
+    {
         update_ring(tm);
         _strip_controller.update();
     }
 
 private:
-    void update_ring(uint32_t tm) {
+    void update_ring(uint32_t tm)
+    {
         if (_ring_controller.in_timeout(tm)) {
             // While timeout is active, let the ring manage its state
         } else if (_ring_controller.mode() != LEDRing::TIMEOUT && _strip_controller.lights_off()) {
@@ -195,10 +200,13 @@ private:
         _ring_controller.update();
     }
 
-    void toggle_door_closed() {
+    void toggle_door_closed()
+    {
         _door_closed = !_door_closed;
         getLocalTime(&_last_door_change_timeinfo);
     }
 };
+
+/*---------------------------------------------------------------------------*/
 
 #endif

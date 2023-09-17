@@ -48,11 +48,11 @@
 #include <Wire.h>
 #include <time.h>
 
-/* ------ File included next should define SECRET_SSID and SECRET_PASS ------- */
+/*------ File included next should define SECRET_SSID and SECRET_PASS -------*/
 #include "arduino_secrets.h"
 const char* ssid = SECRET_SSID;
 const char* password = SECRET_PASS;
-/* --------------------------------------------------------------------------- */
+/*---------------------------------------------------------------------------*/
 
 LEDStripController strip_controller(A0, A1);
 LEDRing led_ring;
@@ -141,7 +141,7 @@ void setup() {
     monitor.reset_direct_input_timeout();
 }
 
-/* --------------------------------------------------------------------------- */
+/*---------------------------------------------------------------------------*/
 
 void loop() {
     uint32_t now = millis();
@@ -199,4 +199,4 @@ void loop() {
     delay(1);
 }
 
-/* --------------------------------------------------------------------------- */
+/*---------------------------------------------------------------------------*/

@@ -5,13 +5,18 @@
 #include <ArduinoJson.h>
 #include <time.h>
 
-// Manages two PWM channels that control 12v LED strips.
+/*---------------------------------------------------------------------------*/
+
+/**
+ * Manages two PWM channels that control 12v LED strips.
+ */
 class LEDStripController {
     static const int LED_REFRESH_HZ = 40000;
     static const int LED_RESOLUTION_BITS = 8;
     static const int MAX_BRIGHTNESS = 250;
     static const int INITIAL_BRIGHTNESS = 20;
     static const int BRIGHTNESS_STEP = 50;
+    static const int IDLE_TIMEOUT = 3600000 * 2; // 2 hours
 
     uint8_t _pins[2];
     bool _waking_up = false;
@@ -29,7 +34,8 @@ public:
     int brightness() const { return _brightness; }
     int max_brightness() const { return MAX_BRIGHTNESS; }
 
-    void init() {
+    void init()
+    {
       ledcAttachPin(_pins[0], 0);
       ledcSetup(0, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
 
@@ -37,13 +43,14 @@ public:
       ledcSetup(1, LED_REFRESH_HZ, LED_RESOLUTION_BITS);
     }
 
-    void update() {
+    void update()
+    {
 	if (_waking_up) {
 	    _brightness = (millis() - _wakeup_start_tm) / 2000;
 	    if (_brightness >= 2 * BRIGHTNESS_STEP)
 		_waking_up = false;
 	    getLocalTime(&_last_light_change_timeinfo);
-	} else if (_brightness && millis() - _last_light_change_ms > 3600000 * 2) {  // 2 hours
+	} else if (_brightness && millis() - _last_light_change_ms > IDLE_TIMEOUT) {
 	    _brightness = 0;
 	    getLocalTime(&_last_light_change_timeinfo);
 	    _last_light_change_ms = millis();
@@ -53,7 +60,8 @@ public:
 	ledcWrite(1, _brightness > BRIGHTNESS_STEP ? _brightness : 0);
     }
 
-    void increase_brightness() {
+    void increase_brightness()
+    {
 	if (!_brightness)
 	    _brightness = INITIAL_BRIGHTNESS;
 	else
@@ -66,7 +74,8 @@ public:
 	_last_light_change_ms = millis();
     }
 
-    void decrease_brightness() {
+    void decrease_brightness()
+    {
 	_brightness -= BRIGHTNESS_STEP;
 	if (_brightness < 0)
 	    _brightness = 0;
@@ -75,19 +84,22 @@ public:
 	_last_light_change_ms = millis();
     }
 
-    void begin_wake() {
+    void begin_wake()
+    {
 	_waking_up = true;
 	_wakeup_start_tm = millis();
 	_last_light_change_ms = millis();
     }
 
-    void turn_off() {
+    void turn_off()
+    {
 	_brightness = 0;
 	_waking_up = false;
 	getLocalTime(&_last_light_change_timeinfo);
     }
 
-    void add_status(StaticJsonDocument<1024>& doc) {
+    void add_status(StaticJsonDocument<1024>& doc)
+    {
       doc["brightness"] = _brightness;
       doc["waking_up"] = _waking_up;
       char lightstr[128];
@@ -95,5 +107,7 @@ public:
       doc["last_light_time"] = lightstr;
   }
 };
+
+/*---------------------------------------------------------------------------*/
 
 #endif

@@ -7,8 +7,11 @@
 #include <FS.h>
 #include <WebServer.h>
 
-/* --------------------------------------------------------------------------- */
+/*---------------------------------------------------------------------------*/
 
+/**
+ * Presents HTTP endpoints for controlling the NurseryServer.
+ */
 class NurseryWebServer {
     LEDStripController& _strip_controller;
     LEDRing& _led_ring;
@@ -34,18 +37,14 @@ public:
 	_server.onNotFound([this]() { this->handleNotFound(); });
     }
 
-    void begin() {
-        _server.begin();
-    }
-
-    void handleClient() {
-        _server.handleClient();
-    }
+    void begin() { _server.begin(); }
+    void handleClient() { _server.handleClient(); }
 
 private:
-    void handle_root() {
+    void handle_root()
+    {
 	File file = _fs.open("/index.html", "r");
-	if(!file || file.isDirectory()){
+	if(!file || file.isDirectory()) {
 	    _server.send(404, "text/plain", "File not found");
 	} else {
 	    size_t sent = _server.streamFile(file, "text/html");
@@ -53,27 +52,32 @@ private:
 	}
     }
 
-    void handle_brighter() {
+    void handle_brighter()
+    {
 	_strip_controller.increase_brightness();
 	_server.send(200, "text/plain", "OK");
     }
 
-    void handle_dimmer() {
+    void handle_dimmer()
+    {
 	_strip_controller.decrease_brightness();
 	_server.send(200, "text/plain", "OK");
     }
 
-    void handle_off() {
+    void handle_off()
+    {
 	_strip_controller.turn_off();
 	_server.send(200, "text/plain", "OK");
     }
 
-    void handle_wake() {
+    void handle_wake()
+    {
 	_strip_controller.begin_wake();
 	_server.send(200, "text/plain", "OK");
     }
 
-    void handle_timeout() {
+    void handle_timeout()
+    {
         if (_led_ring.mode() != LEDRing::TIMEOUT)
             _led_ring.setMode(LEDRing::TIMEOUT);
         else
@@ -81,7 +85,8 @@ private:
 	_server.send(200, "text/plain", "OK");
     }
 
-    void handleNotFound() {
+    void handleNotFound()
+    {
 	String uri = _server.uri();
 	File file = _fs.open(uri, "r");
 	if (!file || file.isDirectory()) {
@@ -97,7 +102,8 @@ private:
 	}
     }
 
-    void handle_status() {
+    void handle_status()
+    {
 	StaticJsonDocument<1024> doc;
 
 	_strip_controller.add_status(doc);
@@ -108,5 +114,7 @@ private:
 	_server.send(200, "text/json", json);
     }
 };
+
+/*---------------------------------------------------------------------------*/
 
 #endif

@@ -31,7 +31,8 @@ public:
         TIMEOUT,
     };
 
-    void init() {
+    void init()
+    {
         _tft.init(240, 240);  // Initialize ST7789 screen
         pinMode(TFT_BACKLIGHT, OUTPUT);
         digitalWrite(TFT_BACKLIGHT, HIGH);  // Backlight on
@@ -44,12 +45,14 @@ public:
 
     bool backlight_on() const { return _backlight_on; }
 
-    void set_backlight(bool state) {
+    void set_backlight(bool state)
+    {
         _backlight_on = state;
         digitalWrite(TFT_BACKLIGHT, _backlight_on);
     }
 
-    void print_row(Row row, uint16_t color, String text) {
+    void print_row(Row row, uint16_t color, String text)
+    {
         _tft.setCursor(0, row * ROW_HEIGHT);
         _tft.setTextColor(color, BG_COLOR);
         if (text.length() < 20)
