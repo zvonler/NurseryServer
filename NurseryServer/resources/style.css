@@ -17,3 +17,8 @@ body {
 .hide {
   display: none;
 }
+
+.footer_line {
+  position: absolute;
+  bottom: 0px;
+}

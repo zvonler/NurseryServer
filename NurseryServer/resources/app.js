@@ -55,6 +55,7 @@ function showStatus(response) {
     document.getElementById("temperature").innerHTML = parsed_json["temperature"] + " F";
     document.getElementById("humidity").innerHTML = parsed_json["humidity"] + " %";
     document.getElementById("server_uptime").innerHTML = parsed_json["server_uptime"];
+    document.getElementById("timeout").innerHTML = parsed_json["timeout"];
 
     placeholder.className = "hide";
     status_panel.className = "show";
@@ -69,6 +70,7 @@ function showStatus(response) {
     document.getElementById("temperature").innerHTML = "N/A";
     document.getElementById("humidity").innerHTML = "N/A";
     document.getElementById("server_uptime").innerHTML = "N/A";
+    document.getElementById("timeout").innerHTML = "N/A";
 
     placeholder.className = "show";
     status_panel.className = "hide";

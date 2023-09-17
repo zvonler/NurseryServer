@@ -15,6 +15,7 @@
     /dimmer - Makes lights dimmer
     /off - Turns lights off
     /wake - Runs a wake cycle that brings the lights up slowly
+    /status - Returns sensor and system information as JSON
 
    Status page includes:
      Current time
@@ -33,12 +34,12 @@
    receiver signals.
 */
 
+#include "funhouse_screen.h"
 #include "led_ring.h"
 #include "led_strip_controller.h"
 #include "nursery_monitor.h"
 #include "nursery_web_server.h"
 #include <Adafruit_GFX.h>
-#include <Adafruit_ST7789.h>
 #include <ArduinoJson.h>
 #include <ESPmDNS.h>
 #include <LittleFS.h>
@@ -53,17 +54,13 @@ const char* ssid = SECRET_SSID;
 const char* password = SECRET_PASS;
 /* --------------------------------------------------------------------------- */
 
-#define BG_COLOR ST77XX_BLACK
-
-Adafruit_ST7789 tft = Adafruit_ST7789(TFT_CS, TFT_DC, TFT_RESET);
 LEDStripController strip_controller(A0, A1);
 LEDRing led_ring;
 NurseryMonitor monitor(strip_controller, led_ring);
 NurseryWebServer web_server(strip_controller, LittleFS, monitor);
+FunHouseScreen screen;
 
 /*---------------------------------------------------------------------------*/
-
-bool backlight = true;
 
 const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -6 * 3600;
@@ -74,196 +71,128 @@ const char* hostname = "nursery-devel";
 
 /*---------------------------------------------------------------------------*/
 
-void update_tft_time() {
-  struct tm timeinfo;
-  if (!getLocalTime(&timeinfo)) {
-    tft.setCursor(0, 60);
-    tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
-    tft.print("NTP: ");
-    tft.setTextColor(ST77XX_RED, BG_COLOR);
-    tft.println("Failed");
-  } else {
-    tft.setCursor(0, 60);
-    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-    tft.print("NTP: ");
-    char timestr[128];
-    strftime(timestr, 128, "%Y%m%d %H:%M", &timeinfo);
-    tft.println(timestr);
-  }
-}
-
 void setup() {
-  Serial.begin(115200);
+    Serial.begin(115200);
 
-  pinMode(LED_BUILTIN, OUTPUT);
+    pinMode(LED_BUILTIN, OUTPUT);
 
-  monitor.init();
+    monitor.init();
+    strip_controller.init();
+    screen.init();
+    led_ring.init();
 
-strip_controller.init();
+    monitor.check_door_sensor();
 
-  tft.init(240, 240);  // Initialize ST7789 screen
-  pinMode(TFT_BACKLIGHT, OUTPUT);
-  digitalWrite(TFT_BACKLIGHT, HIGH);  // Backlight on
+    if (!monitor.aht_begin()) {
+	screen.print_row(FunHouseScreen::AHT, ST77XX_RED, "AHT20: FAIL!");
+    } else {
+	screen.print_row(FunHouseScreen::AHT, ST77XX_GREEN, "AHT20: OK!");
+    }
 
-  tft.fillScreen(BG_COLOR);
-  tft.setTextSize(2);
-  tft.setTextColor(ST77XX_YELLOW);
-  tft.setTextWrap(false);
+    screen.print_row(FunHouseScreen::WIFI, ST77XX_YELLOW, "WIFI: ");
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    int tries = 0;
+    while (WiFi.status() != WL_CONNECTED && tries < 30) {
+	const char* frames[4] = { "|", "/", "-", "\\" };
+	static int frame = 0;
+	String text = String("WIFI: ") + String(frames[frame++]);
+	screen.print_row(FunHouseScreen::WIFI, ST77XX_YELLOW, text);
+	if (frame > 3)
+	    frame = 0;
+	++tries;
+	delay(100);
+    }
+    if (WiFi.status() == WL_CONNECTED) {
+	String text = String("WIFI: ") + WiFi.localIP().toString();
+	screen.print_row(FunHouseScreen::WIFI, ST77XX_GREEN, text);
+    } else {
+	screen.print_row(FunHouseScreen::WIFI, ST77XX_RED, "WIFI: Failed!");
+    }
 
-  // check AHT!
-  tft.setCursor(0, 0);
-  tft.setTextColor(ST77XX_YELLOW);
-  tft.print("AHT20: ");
+    screen.print_row(FunHouseScreen::MDNS, ST77XX_YELLOW, "MDNS: ");
+    if (MDNS.begin(hostname)) {
+	String text = String("MDNS: ") + String(hostname);
+	screen.print_row(FunHouseScreen::MDNS, ST77XX_GREEN, text);
+    } else {
+	screen.print_row(FunHouseScreen::MDNS, ST77XX_RED, "MDNS: Failed");
+    }
 
-  if (!monitor.aht_begin()) {
-    tft.setTextColor(ST77XX_RED);
-    tft.println("FAIL!");
-    while (1) delay(100);
-  }
-  tft.setCursor(0, 0);
-  tft.setTextColor(ST77XX_GREEN);
-  tft.print("AHT20: ");
-  tft.println("OK!");
+    screen.print_row(FunHouseScreen::NTP, ST77XX_YELLOW, "NTP: ");
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
 
-  tft.setCursor(0, 20);
-  tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
-  tft.print("WIFI: ");
+    screen.print_row(FunHouseScreen::MCP, ST77XX_YELLOW, "MCP: ");
+    if (monitor.mcp_begin()) {
+	screen.print_row(FunHouseScreen::MCP, ST77XX_GREEN, "MCP: Found");
+    } else {
+	screen.print_row(FunHouseScreen::MCP, ST77XX_RED, "MCP: Not found");
+    }
 
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
+    screen.print_row(FunHouseScreen::LFS, ST77XX_YELLOW, "LFS: ");
+    if(LittleFS.begin(false)) {
+	screen.print_row(FunHouseScreen::LFS, ST77XX_GREEN, "LFS: Mounted");
+    } else {
+	screen.print_row(FunHouseScreen::LFS, ST77XX_RED, "LFS: Failed");
+    }
 
-  int tries = 0;
-  while (WiFi.status() != WL_CONNECTED && tries < 30) {
-    tft.setCursor(0, 20);
-    tft.print("WIFI: ");
-    const char* frames[4] = { "|", "/", "-", "\\" };
-    static int frame = 0;
-    tft.print(frames[frame]);
-    ++frame;
-    if (frame > 3)
-      frame = 0;
-    ++tries;
-    delay(100);
-  }
+    web_server.begin();
 
-  if (WiFi.status() == WL_CONNECTED) {
-    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-    tft.setCursor(0, 20);
-    tft.print("WIFI: ");
-    tft.println(WiFi.localIP());
-  } else {
-    tft.setCursor(0, 20);
-    tft.print("WIFI: ");
-    tft.println("Failed!");
-  }
-
-  tft.setCursor(0, 40);
-  tft.setTextColor(ST77XX_YELLOW);
-  tft.print("MDNS: ");
-  if (MDNS.begin(hostname)) {
-    tft.setCursor(0, 40);
-    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-    tft.print("MDNS: ");
-    tft.println(hostname);
-  } else {
-    tft.println("Failed");
-  }
-
-  tft.setCursor(0, 60);
-  tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
-  tft.print("NTP: ");
-
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-
-  update_tft_time();
-
-  tft.setCursor(0, 80);
-  tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
-  tft.print("MCP: ");
-
-  if (monitor.mcp_begin()) {
-    tft.setCursor(0, 80);
-    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-    tft.println("MCP: Found");
-  } else {
-    tft.setTextColor(ST77XX_RED, BG_COLOR);
-    tft.println("Not found");
-  }
-
-  tft.setCursor(0, 100);
-  tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
-  tft.print("LFS: ");
-  if(LittleFS.begin(false)) {
-    tft.setCursor(0, 100);
-    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-    tft.print("LFS: Mounted");
-  } else {
-    tft.setTextColor(ST77XX_RED, BG_COLOR);
-    tft.println("Mount failed");
-  }
-
-  web_server.begin();
-
-  // Don't timeout screen during / after setup
-  monitor.reset_direct_input_timeout();
-  monitor.check_door_sensor();
-
-  led_ring.init();
+    // Don't timeout screen during / after setup
+    monitor.reset_direct_input_timeout();
 }
 
 /* --------------------------------------------------------------------------- */
 
-
-void set_backlight(bool state) {
-  backlight = state;
-  digitalWrite(TFT_BACKLIGHT, backlight);
-}
-
 void loop() {
-    digitalWrite(LED_BUILTIN, millis() % 1024 < 512);
+    uint32_t now = millis();
+
+    digitalWrite(LED_BUILTIN, now % 1024 < 512);
 
     web_server.handleClient();
 
     monitor.check_for_motion();
     monitor.check_door_sensor();
     if (monitor.check_for_button_input()) {
-	if (!backlight)
-	    set_backlight(true);
-    } else if (backlight && monitor.direct_input_timeout_past())
-	set_backlight(false);
+	if (!screen.backlight_on())
+	    screen.set_backlight(true);
+    } else if (screen.backlight_on() && monitor.direct_input_timeout_past()) {
+	screen.set_backlight(false);
+    }
 
-    monitor.update_outputs();
+    monitor.update_outputs(now);
 
-    if (backlight) {
+    if (screen.backlight_on()) {
 	EVERY_N_MILLISECONDS(500) {
+	    char buf[48];
+
+	    struct tm timeinfo;
+	    if (!getLocalTime(&timeinfo)) {
+		screen.print_row(FunHouseScreen::NTP, ST77XX_RED, "NTP: Failed");
+	    } else {
+		strftime(buf, 48, "NTP: %Y%m%d %H:%M", &timeinfo);
+		screen.print_row(FunHouseScreen::NTP, ST77XX_GREEN, buf);
+	    }
+
 	    sensors_event_t humidity, temp;
 	    monitor.getAHTEvent(humidity, temp);
+	    snprintf(buf, 48, "AHT20: %d F %d %%",
+		int(temp.temperature * 9 / 5 + 32),
+		int(humidity.relative_humidity));
+	    screen.print_row(FunHouseScreen::AHT, ST77XX_GREEN, buf);
 
-	    tft.setCursor(0, 0);
-	    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-	    tft.print("AHT20: ");
-	    tft.print(temp.temperature * 9 / 5 + 32, 0);
-	    tft.print(" F ");
-	    tft.print(humidity.relative_humidity, 0);
-	    tft.print(" %");
-	    tft.println("              ");
-
-	    tft.setCursor(0, 120);
-	    tft.setTextColor(ST77XX_YELLOW, BG_COLOR);
-	    tft.print("Ambient light: ");
 	    uint16_t analogread = analogRead(A3);
-	    tft.setTextColor(ST77XX_WHITE, BG_COLOR);
-	    tft.print(analogread);
-	    tft.println("    ");
+	    snprintf(buf, 48, "Ambient light: %d", analogread);
+	    screen.print_row(FunHouseScreen::AMBIENT, ST77XX_GREEN, buf);
 
-	    tft.setCursor(0, 140);
-	    tft.setTextColor(ST77XX_GREEN, BG_COLOR);
-	    tft.print("LED level:");
-	    char ledstr[10];
-	    snprintf(ledstr, 10, "% 3d/%d ", strip_controller.brightness(), strip_controller.max_brightness());
-	    tft.println(ledstr);
+	    snprintf(buf, 48, "LED level: %d/%d ", strip_controller.brightness(), strip_controller.max_brightness());
+	    screen.print_row(FunHouseScreen::LED_STRIP_LEVEL, ST77XX_GREEN, buf);
 
-	    update_tft_time();
+	    if (led_ring.in_timeout(now)) {
+		snprintf(buf, 48, "Timeout: %d secs", led_ring.timeout_millis_remaining(now)/1000);
+		screen.print_row(FunHouseScreen::TIMEOUT, ST77XX_RED, buf);
+	    } else {
+		screen.print_row(FunHouseScreen::TIMEOUT, ST77XX_GREEN, "Timeout: Inactive");
+	    }
 	}
     }
 

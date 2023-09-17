@@ -99,6 +99,12 @@ public:
         sprintf(uptime, "% 3d:%02d:%02d", hr, min % 60, sec % 60);
         doc["server_uptime"] = uptime;
 
+        uint32_t now = millis();
+        if (_ring_controller.in_timeout(now)) {
+            doc["timeout"] = String(_ring_controller.timeout_millis_remaining(now)/1000) + " seconds remaining";
+        } else {
+            doc["timeout"] = "inactive";
+        }
     }
 
     void reset_direct_input_timeout() {
@@ -160,14 +166,14 @@ public:
         _aht.getEvent(&humidity, &temp);
     }
 
-    void update_outputs() {
-        update_ring();
+    void update_outputs(uint32_t tm) {
+        update_ring(tm);
         _strip_controller.update();
     }
 
 private:
-    void update_ring() {
-        if (_ring_controller.in_timeout()) {
+    void update_ring(uint32_t tm) {
+        if (_ring_controller.in_timeout(tm)) {
             // While timeout is active, let the ring manage its state
         } else if (_ring_controller.mode() != LEDRing::TIMEOUT && _strip_controller.lights_off()) {
             // Turn off anytime the main lights aren't on, unless it was a timeout so we show green
@@ -175,15 +181,15 @@ private:
         } else if (_mcp_found) {
             // Not in timeout, main lights on
             static uint32_t last_remote_tm = 0;
-            if (millis() - last_remote_tm > 500) {
+            if (tm - last_remote_tm > 500) {
                 if (_mcp.digitalRead(REMOTE_A))
-                    _ring_controller.setMode(LEDRing::CONFETTI), last_remote_tm = millis();
+                    _ring_controller.setMode(LEDRing::CONFETTI), last_remote_tm = tm;
                 else if (_mcp.digitalRead(REMOTE_B))
-                    _ring_controller.setMode(LEDRing::PULSE), last_remote_tm = millis();
+                    _ring_controller.setMode(LEDRing::PULSE), last_remote_tm = tm;
                 else if (_mcp.digitalRead(REMOTE_C))
-                    _ring_controller.setMode(LEDRing::CANDLE), last_remote_tm = millis();
+                    _ring_controller.setMode(LEDRing::CANDLE), last_remote_tm = tm;
                 else if (_mcp.digitalRead(REMOTE_D))
-                    _ring_controller.setMode(LEDRing::OFF), last_remote_tm = millis();
+                    _ring_controller.setMode(LEDRing::OFF), last_remote_tm = tm;
             }
         }
         _ring_controller.update();

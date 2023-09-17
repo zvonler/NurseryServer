@@ -63,13 +63,20 @@ public:
     FastLED.show();
   }
 
-  bool in_timeout() const {
-    return _mode == LEDRing::TIMEOUT && millis() < _timeout_start_ms + TIMEOUT_DURATION;
+  bool in_timeout(uint32_t tm) const {
+    return _mode == LEDRing::TIMEOUT && tm < _timeout_start_ms + TIMEOUT_DURATION;
+  }
+
+  uint32_t timeout_millis_remaining(uint32_t tm) const {
+      if (in_timeout(tm))
+          return TIMEOUT_DURATION - (tm - _timeout_start_ms);
+      else
+          return 0;
   }
 
 private:
   void timeout() {
-    if (!in_timeout()) {
+    if (!in_timeout(millis())) {
       fill_solid(_leds, NUM_LEDS, CRGB::Green);
     } else {
       float frac_remaining = 1.0 - (millis() - _timeout_start_ms) / (float)TIMEOUT_DURATION;
