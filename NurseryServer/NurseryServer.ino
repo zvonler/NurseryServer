@@ -57,7 +57,7 @@ const char* password = SECRET_PASS;
 LEDStripController strip_controller(A0, A1);
 LEDRing led_ring;
 NurseryMonitor monitor(strip_controller, led_ring);
-NurseryWebServer web_server(strip_controller, LittleFS, monitor);
+NurseryWebServer web_server(strip_controller, led_ring, LittleFS, monitor);
 FunHouseScreen screen;
 
 /*---------------------------------------------------------------------------*/

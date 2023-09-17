@@ -11,22 +11,25 @@
 
 class NurseryWebServer {
     LEDStripController& _strip_controller;
+    LEDRing& _led_ring;
     fs::FS& _fs;
     NurseryMonitor& _monitor;
     WebServer _server;
 
 public:
-    NurseryWebServer(LEDStripController& strip_controller, fs::FS& fs, NurseryMonitor& monitor)
-    : _strip_controller(strip_controller)
-    , _fs(fs)
-    , _monitor(monitor)
-    , _server(80)
+    NurseryWebServer(LEDStripController& strip_controller, LEDRing& led_ring, fs::FS& fs, NurseryMonitor& monitor)
+        : _strip_controller(strip_controller)
+        , _led_ring(led_ring)
+        , _fs(fs)
+        , _monitor(monitor)
+        , _server(80)
     {
 	_server.on("/", [this]() { this->handle_root(); });
 	_server.on("/brighter", [this]() { this->handle_brighter(); });
 	_server.on("/dimmer", [this]() { this->handle_dimmer(); });
 	_server.on("/off", [this]() { this->handle_off(); });
 	_server.on("/status", [this]() { this->handle_status(); });
+	_server.on("/timeout", [this]() { this->handle_timeout(); });
 	_server.on("/wake", [this]() { this->handle_wake(); });
 	_server.onNotFound([this]() { this->handleNotFound(); });
     }
@@ -67,6 +70,14 @@ private:
 
     void handle_wake() {
 	_strip_controller.begin_wake();
+	_server.send(200, "text/plain", "OK");
+    }
+
+    void handle_timeout() {
+        if (_led_ring.mode() != LEDRing::TIMEOUT)
+            _led_ring.setMode(LEDRing::TIMEOUT);
+        else
+            _led_ring.setMode(LEDRing::OFF);
 	_server.send(200, "text/plain", "OK");
     }
 

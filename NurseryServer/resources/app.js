@@ -92,3 +92,7 @@ function dimmer() {
 function wake() {
   send_get("wake");
 }
+
+function timeout() {
+  send_get("timeout");
+}
