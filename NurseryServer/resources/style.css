@@ -28,7 +28,8 @@ body {
 }
 
 button {
-    width: 100px;
+    height: 60px;
+    width: 200px;
     border-radius: 8px;
     padding: 6px;
     margin: 10px;
