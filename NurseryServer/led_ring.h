@@ -90,6 +90,13 @@ public:
         return 0;
     }
 
+    uint32_t timeout_millis_past(uint32_t tm) const
+    {
+        if (in_timeout(tm))
+            return 0;
+        return tm - (_timeout_start_ms + TIMEOUT_DURATION);
+    }
+
 private:
     void timeout()
     {

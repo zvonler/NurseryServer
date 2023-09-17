@@ -180,9 +180,10 @@ private:
     {
         if (_ring_controller.in_timeout(tm)) {
             // While timeout is active, let the ring manage its state
-        } else if (_ring_controller.mode() != LEDRing::TIMEOUT && _strip_controller.lights_off()) {
-            // Turn off anytime the main lights aren't on, unless it was a timeout so we show green
-            _ring_controller.setMode(LEDRing::OFF);
+        } else if (_strip_controller.lights_off()) {
+            // If main lights are off then ring should be off unless a timeout just finished.
+            if (_ring_controller.mode() != LEDRing::TIMEOUT || _ring_controller.timeout_millis_past(tm) > 60000)
+                _ring_controller.setMode(LEDRing::OFF);
         } else if (_mcp_found) {
             // Not in timeout, main lights on
             static uint32_t last_remote_tm = 0;

@@ -67,6 +67,7 @@ private:
     void handle_off()
     {
 	_strip_controller.turn_off();
+        _led_ring.setMode(LEDRing::OFF);
 	_server.send(200, "text/plain", "OK");
     }
 
