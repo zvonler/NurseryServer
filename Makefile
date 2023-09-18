@@ -19,7 +19,7 @@ FQBN := $(shell $(ARDUINO_CLI) compile --show-properties $(PROJECT) | grep build
 CHIP := $(shell echo $(FQBN) | sed -e 's/.*_//')
 BAUD = 921600
 CORE = $(HOME)/Library/Arduino15/packages/esp32/hardware/esp32/2.0.11/tools/partitions/boot_app0.bin
-UPLOAD_FQBN = esp32:esp32:
+UPLOAD_FQBN = esp32:esp32:esp32s2
 
 .PHONY: all clean compile dump properties upload
 
@@ -49,19 +49,28 @@ properties:
 	$(ARDUINO_CLI) compile --show-properties $(PROJECT)
 
 upload: $(BINFILE) $(FS_IMAGE)
-	$(eval PORT=$(shell arduino-cli board list | grep $(UPLOAD_FQBN) | cut -d ' ' -f 1))
+	$(eval PORT=$(shell arduino-cli board list | grep $(FQBN) | cut -d ' ' -f 1))
 	@if [ -n "$(PORT)" ]; then \
-	echo "Uploading to $(PORT)"; \
-	$(VENV_DIR)/bin/esptool.py --chip $(CHIP) --port $(PORT) --baud $(BAUD) \
-		--before default_reset --after no_reset write_flash -z \
-		--flash_mode dio --flash_freq 80m --flash_size 4MB \
-		0x1000 "$(BUILD_DIR)/$(PROJECT).ino.bootloader.bin" \
-		0x8000 "$(BUILD_DIR)/$(PROJECT).ino.partitions.bin" \
-		0xe000 "$(CORE)" \
-		0x10000 "$(BUILD_DIR)/$(PROJECT).ino.bin" \
-		0x110000 "$(FS_IMAGE)"; \
-	else \
-	echo "Error: No board attached matching $(UPLOAD_FQBN)"; \
+		echo "Resetting $(PORT) to trigger bootloader"; \
+		screen -dmS reset_port $(PORT) 1200 -X C-a \\\\; \
+		sleep 5; \
+		UPLOAD_PORT=$$(arduino-cli board list | grep $(UPLOAD_FQBN) | cut -d ' ' -f 1); \
+		if [ -n "$${UPLOAD_PORT}" ]; then \
+			echo "Uploading to $${UPLOAD_PORT}"; \
+			$(VENV_DIR)/bin/esptool.py --chip $(CHIP) --port $${UPLOAD_PORT} --baud $(BAUD) \
+				--before default_reset --after no_reset write_flash -z \
+				--flash_mode dio --flash_freq 80m --flash_size 4MB \
+				0x1000 "$(BUILD_DIR)/$(PROJECT).ino.bootloader.bin" \
+				0x8000 "$(BUILD_DIR)/$(PROJECT).ino.partitions.bin" \
+				0xe000 "$(CORE)" \
+				0x10000 "$(BUILD_DIR)/$(PROJECT).ino.bin" \
+				0x110000 "$(FS_IMAGE)"; \
+			else \
+			echo "Error: No bootloader matching $(UPLOAD_FQBN)"; \
+			fi; \
+		else \
+		echo "Error: No board attached matching $(FQBN)"; \
+		exit 1; \
 	fi
 
 venv: venv_reqs.txt
