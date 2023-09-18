@@ -18,7 +18,7 @@ function update() {
 }
 
 function send_get(uri, onreadystatechange) {
-  var url = "http://nursery-devel.local/" + uri;
+  var url = window.location.href.replace("index.html", uri);
   var r = new XMLHttpRequest();
   r.open("GET", url);
   if (onreadystatechange != null) {
