@@ -27,8 +27,7 @@ const char* ntpServer = "pool.ntp.org";
 const long gmtOffset_sec = -6 * 3600;
 const int daylightOffset_sec = 3600;
 
-// Change for "release" builds
-const char* hostname = "nursery-devel";
+String hostname = "nursery";
 
 /*---------------------------------------------------------------------------*/
 
@@ -73,11 +72,25 @@ void setup()
     }
 
     screen.print_row(FunHouseScreen::MDNS, ST77XX_YELLOW, "MDNS: ");
-    if (MDNS.begin(hostname)) {
-        String text = String("MDNS: ") + String(hostname);
-        screen.print_row(FunHouseScreen::MDNS, ST77XX_GREEN, text);
+    if (mdns_init()) {
+        screen.print_row(FunHouseScreen::MDNS, ST77XX_RED, "MDNS: Failed mdns_init");
     } else {
-        screen.print_row(FunHouseScreen::MDNS, ST77XX_RED, "MDNS: Failed");
+        esp_ip4_addr_t addr;
+        addr.addr = 0;
+        esp_err_t err = mdns_query_a(hostname.c_str(), 5000,  &addr);
+        if (err && err == ESP_ERR_NOT_FOUND) {
+            // Use default hostname since no one else answered
+        } else {
+            hostname += "-dev";
+        }
+        mdns_free();
+
+        if (MDNS.begin(hostname)) {
+            String text = String("MDNS: ") + String(hostname);
+            screen.print_row(FunHouseScreen::MDNS, ST77XX_GREEN, text);
+        } else {
+            screen.print_row(FunHouseScreen::MDNS, ST77XX_RED, "MDNS: Failed");
+        }
     }
 
     screen.print_row(FunHouseScreen::NTP, ST77XX_YELLOW, "NTP: ");

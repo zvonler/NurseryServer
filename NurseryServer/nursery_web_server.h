@@ -43,13 +43,8 @@ public:
 private:
     void handle_root()
     {
-        File file = _fs.open("/index.html", "r");
-        if(!file || file.isDirectory()) {
-            _server.send(404, "text/plain", "File not found");
-        } else {
-            size_t sent = _server.streamFile(file, "text/html");
-            file.close();
-        }
+        _server.sendHeader("Location", "/index.html", true);
+        _server.send(308, "text/plain", "");
     }
 
     void handle_brighter()
