@@ -19,7 +19,7 @@ FQBN := $(shell $(ARDUINO_CLI) compile --show-properties $(PROJECT) | grep build
 CHIP := $(shell echo $(FQBN) | sed -e 's/.*_//')
 BAUD = 921600
 CORE = $(HOME)/Library/Arduino15/packages/esp32/hardware/esp32/2.0.11/tools/partitions/boot_app0.bin
-UPLOAD_FQBN = esp32:esp32:esp32s2
+UPLOAD_FQBN = esp32:esp32:(esp32s2|deneyapmini)
 
 .PHONY: all clean compile dump properties upload
 
@@ -54,7 +54,7 @@ upload: $(BINFILE) $(FS_IMAGE)
 		echo "Resetting $(PORT) to trigger bootloader"; \
 		screen -dmS reset_port $(PORT) 1200 -X C-a \\\\; \
 		sleep 5; \
-		UPLOAD_PORT=$$(arduino-cli board list | grep $(UPLOAD_FQBN) | cut -d ' ' -f 1); \
+		UPLOAD_PORT=$$(arduino-cli board list | egrep '$(UPLOAD_FQBN)' | cut -d ' ' -f 1); \
 		if [ -n "$${UPLOAD_PORT}" ]; then \
 			echo "Uploading to $${UPLOAD_PORT}"; \
 			$(VENV_DIR)/bin/esptool.py --chip $(CHIP) --port $${UPLOAD_PORT} --baud $(BAUD) \
