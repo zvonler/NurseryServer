@@ -9,6 +9,7 @@ RESOURCES := $(wildcard $(RESOURCES_DIR)/*)
 BUILD_DIR = build
 BINFILE = $(BUILD_DIR)/$(PROJECT).ino.bin
 FS_IMAGE = $(BUILD_DIR)/resources.lfs
+MKLITTLEFS_REPO = git@github.com:zvonler/mklittlefs.git
 MKLITTLEFS = $(BUILD_DIR)/mklittlefs/mklittlefs
 
 PYTHON = /opt/homebrew/bin/python3.11
@@ -37,11 +38,12 @@ dump: $(CFG_FILE)
 	arduino-cli config dump
 
 $(FS_IMAGE): venv $(RESOURCES) $(MKLITTLEFS)
-	$(MKLITTLEFS) -c $(RESOURCES_DIR) -s 3014656 $(FS_IMAGE)
+	@(cd $(RESOURCES_DIR) && find . -type f | sed -e 's/^\.//') > $(BUILD_DIR)/fs_image_listing.txt
+	$(MKLITTLEFS) -c $(RESOURCES_DIR) -s 3014656 -T $(BUILD_DIR)/fs_image_listing.txt $(FS_IMAGE)
 
 $(MKLITTLEFS):
 	@if [ ! -d $(BUILD_DIR)/mklittlefs ]; then \
-	git clone git@github.com:earlephilhower/mklittlefs.git $(BUILD_DIR)/mklittlefs; \
+	git clone $(MKLITTLEFS_REPO) $(BUILD_DIR)/mklittlefs; \
 	cd $(BUILD_DIR)/mklittlefs && git submodule update --init && make dist; \
 	fi
 
