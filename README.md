@@ -37,3 +37,5 @@ The FunHouse I2C connection is used to talk to an MCP23008 to read the RF remote
 ![Status page example](doc/status_page_example.png?raw=true "Status Page")
 
 ![Circuit diagram](doc/circuit.png?raw=true "Circuit Diagram")
+
+![FunHouse startup](doc/server_boot.gif?raw=true "Boot sequence")
