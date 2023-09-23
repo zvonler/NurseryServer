@@ -9,7 +9,7 @@ RESOURCES := $(wildcard $(RESOURCES_DIR)/*)
 BUILD_DIR = build
 BINFILE = $(BUILD_DIR)/$(PROJECT).ino.bin
 FS_IMAGE = $(BUILD_DIR)/resources.lfs
-MKLITTLEFS_REPO = git@github.com:zvonler/mklittlefs.git
+MKLITTLEFS_REPO = git@github.com:earlephilhower/mklittlefs.git
 MKLITTLEFS = $(BUILD_DIR)/mklittlefs/mklittlefs
 
 PYTHON = /opt/homebrew/bin/python3.11
